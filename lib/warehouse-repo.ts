@@ -355,8 +355,28 @@ class WarehouseRepository {
       return null
     }
 
-    const newWeight = Math.max(0, (item.currentWeight || 0) - exitData.weightExit)
-    const newBobinCount = Math.max(0, (item.bobinCount || 0) - exitData.bobinExit)
+    // Calculate weight per coil for automatic weight calculation
+    const currentWeight = item.currentWeight || 0
+    const currentBobinCount = item.bobinCount || 0
+    const weightPerCoil = currentBobinCount > 0 ? currentWeight / currentBobinCount : 0
+
+    // Calculate total weight to be deducted
+    let totalWeightExit = exitData.weightExit || 0
+    
+    // If only coils are specified (no weight), calculate weight based on coils
+    if (exitData.bobinExit > 0 && exitData.weightExit === 0) {
+      totalWeightExit = exitData.bobinExit * weightPerCoil
+      console.log("[v0] Calculated weight from coils:", { 
+        bobinExit: exitData.bobinExit, 
+        weightPerCoil, 
+        totalWeightExit 
+      })
+    }
+    // If both weight and coils are specified, use the specified weight
+    // If only weight is specified, use that weight
+
+    const newWeight = Math.max(0, currentWeight - totalWeightExit)
+    const newBobinCount = Math.max(0, currentBobinCount - exitData.bobinExit)
 
     // Determine new status
     const status: WarehouseItemStatus = newWeight === 0 && newBobinCount === 0 ? "Stok Yok" : "Stokta"
@@ -372,8 +392,8 @@ class WarehouseRepository {
     const exitLocationLabel = exitLocationLabels[exitData.exitLocation] || exitData.exitLocation
     let movementNotes = `Çıkış: ${exitLocationLabel}`
     
-    if (exitData.weightExit > 0) {
-      movementNotes += ` - ${exitData.weightExit}kg`
+    if (totalWeightExit > 0) {
+      movementNotes += ` - ${totalWeightExit.toFixed(1)}kg`
     }
     if (exitData.bobinExit > 0) {
       movementNotes += ` - ${exitData.bobinExit} bobin`
@@ -397,7 +417,7 @@ class WarehouseRepository {
       await this.addStockMovement({
         warehouse_item_id: itemId,
         type: "Çıkan",
-        quantity: -exitData.weightExit, // Negative for outgoing
+        quantity: -totalWeightExit, // Use calculated total weight (negative for outgoing)
         operator: exitData.operatorName || "Bilinmeyen",
         notes: movementNotes,
       })
