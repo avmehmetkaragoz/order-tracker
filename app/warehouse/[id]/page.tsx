@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { LoadingSpinner } from "@/components/loading-spinner"
 import { BarcodePrinter } from "@/components/barcode-printer"
-import { ArrowLeft, Package, History, Edit, TrendingDown, TrendingUp, RotateCcw } from "lucide-react"
+import { ArrowLeft, Package, History, Edit, TrendingDown, TrendingUp, RotateCcw, LogOut, Undo2 } from "lucide-react"
 
 export default function WarehouseItemDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id: itemId } = use(params)
@@ -186,6 +186,33 @@ export default function WarehouseItemDetailPage({ params }: { params: Promise<{ 
                   {item.receivedDate ? formatDate(item.receivedDate) : "Belirtilmemiş"}
                 </div>
               </div>
+            </div>
+
+            {/* Product Actions */}
+            <div className="grid grid-cols-2 gap-3 pt-2">
+              <Button 
+                variant="outline" 
+                className="w-full bg-transparent"
+                onClick={() => {
+                  // TODO: Implement product exit functionality
+                  console.log("Ürün Çıkış clicked")
+                }}
+              >
+                <LogOut className="h-4 w-4 mr-2" />
+                Ürün Çıkış
+              </Button>
+              
+              <Button 
+                variant="outline" 
+                className="w-full bg-transparent"
+                onClick={() => {
+                  // TODO: Implement product return functionality
+                  console.log("Ürün İade clicked")
+                }}
+              >
+                <Undo2 className="h-4 w-4 mr-2" />
+                Ürün İade
+              </Button>
             </div>
 
             {item.notes && (
