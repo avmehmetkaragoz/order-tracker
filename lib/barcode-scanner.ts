@@ -278,9 +278,10 @@ export class BarcodeScanner {
 
   // Manual barcode input fallback
   static validateBarcodeFormat(barcode: string): boolean {
-    // Validate warehouse barcode format (WH + 6 digits + 6 alphanumeric)
-    const warehousePattern = /^WH\d{6}[A-Z0-9]{6}$/
-    return warehousePattern.test(barcode)
+    // Validate warehouse barcode format - more flexible pattern to match existing barcodes
+    // WH followed by alphanumeric characters (like WH7894349E1O37)
+    const warehousePattern = /^WH[A-Z0-9]+$/
+    return warehousePattern.test(barcode) && barcode.length >= 8
   }
 
   static formatBarcode(input: string): string {
