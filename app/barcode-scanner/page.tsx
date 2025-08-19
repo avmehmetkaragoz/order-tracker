@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
-import { ArrowLeft, Camera, Search, Package, MapPin, Calendar } from "lucide-react"
+import { ArrowLeft, Camera, Search, Package, MapPin, Calendar, RotateCcw } from "lucide-react"
 import { warehouseRepo } from "@/lib/warehouse-repo"
 import { formatDate } from "@/lib/date-utils"
 import type { WarehouseItem } from "@/types/warehouse"
@@ -16,6 +16,8 @@ export default function BarcodeScanPage() {
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [searchHistory, setSearchHistory] = useState<string[]>([])
+  const [currentCamera, setCurrentCamera] = useState<"environment" | "user">("environment")
+  const [availableCameras, setAvailableCameras] = useState<MediaDeviceInfo[]>([])
   const videoRef = useRef<HTMLVideoElement>(null)
   const streamRef = useRef<MediaStream | null>(null)
 
@@ -47,14 +49,17 @@ export default function BarcodeScanPage() {
     }
   }
 
-  const startCamera = async () => {
+  const startCamera = async (preferredCamera?: "environment" | "user") => {
     try {
-      console.log("[v1] ===== CAMERA START FUNCTION CALLED =====")
+      console.log("[v2] ===== CAMERA START FUNCTION CALLED =====")
+      console.log("[v2] Preferred camera:", preferredCamera || currentCamera)
       setError(null)
       setIsScanning(true)
       
+      const cameraToUse = preferredCamera || currentCamera
+      
       const browserInfo = checkBrowserCompatibility()
-      console.log("[v1] Browser compatibility:", browserInfo)
+      console.log("[v2] Browser compatibility:", browserInfo)
 
       // Check basic requirements
       if (!browserInfo.hasMediaDevices || !browserInfo.hasGetUserMedia) {
@@ -66,167 +71,131 @@ export default function BarcodeScanPage() {
         throw new Error("Edge mobil tarayıcısında kamera erişimi için HTTPS gereklidir")
       }
 
-      // Edge mobile specific warning
-      if (browserInfo.isEdgeMobile) {
-        console.log("[v1] Edge mobile detected - using specialized approach")
-      }
-
-      // Wait for user gesture if needed (Edge mobile requirement)
-      if (browserInfo.isEdgeMobile) {
-        await new Promise(resolve => setTimeout(resolve, 100))
-      }
-
-      // Step 1: Request basic permission without constraints
-      console.log("[v1] Step 1: Requesting basic camera permission...")
+      // Step 1: Request basic permission and enumerate devices
+      console.log("[v2] Step 1: Requesting permission and enumerating devices...")
       let permissionStream: MediaStream | null = null
       
       try {
-        // For Edge mobile, try the most basic request first
+        // Get basic permission first
         const basicConstraints = browserInfo.isEdgeMobile 
           ? { video: { width: 640, height: 480 }, audio: false }
           : { video: true, audio: false }
           
         permissionStream = await navigator.mediaDevices.getUserMedia(basicConstraints)
-        console.log("[v1] Basic permission granted")
+        console.log("[v2] Basic permission granted")
         
-        // Immediately stop to release the camera
-        permissionStream.getTracks().forEach(track => {
-          console.log("[v1] Stopping permission track:", track.kind, track.label)
-          track.stop()
-        })
+        // Stop immediately to release camera
+        permissionStream.getTracks().forEach(track => track.stop())
         permissionStream = null
         
-        // Wait a bit for the camera to be released
-        await new Promise(resolve => setTimeout(resolve, 500))
+        // Wait for camera to be released
+        await new Promise(resolve => setTimeout(resolve, 300))
         
       } catch (permissionError) {
-        console.error("[v1] Basic permission failed:", permissionError)
-        
-        if (permissionError instanceof Error) {
-          if (permissionError.name === 'NotAllowedError') {
-            throw new Error("Kamera izni reddedildi. Tarayıcı ayarlarından kamera erişimine izin verin.")
-          } else if (permissionError.name === 'NotFoundError') {
-            throw new Error("Kamera bulunamadı. Cihazınızda kamera olduğundan emin olun.")
-          } else if (permissionError.name === 'NotReadableError') {
-            throw new Error("Kamera başka bir uygulama tarafından kullanılıyor.")
-          }
-        }
-        
-        throw new Error("Kamera izni alınamadı: " + (permissionError as Error).message)
+        console.error("[v2] Basic permission failed:", permissionError)
+        throw new Error("Kamera izni alınamadı. Tarayıcı ayarlarından kamera erişimine izin verin.")
       }
 
       // Step 2: Enumerate devices after permission
-      console.log("[v1] Step 2: Enumerating devices...")
       let devices: MediaDeviceInfo[] = []
-      
       try {
         devices = await navigator.mediaDevices.enumerateDevices()
-        console.log("[v1] Available devices:", devices.map(d => ({ kind: d.kind, label: d.label, deviceId: d.deviceId })))
-        
         const videoDevices = devices.filter(device => device.kind === 'videoinput')
-        console.log("[v1] Video devices found:", videoDevices.length)
+        console.log("[v2] Available video devices:", videoDevices.map(d => ({ 
+          label: d.label, 
+          deviceId: d.deviceId.substring(0, 8) + "..." 
+        })))
+        
+        setAvailableCameras(videoDevices)
         
         if (videoDevices.length === 0) {
           throw new Error("Video kamerası bulunamadı")
         }
-        
       } catch (deviceError) {
-        console.warn("[v1] Device enumeration failed:", deviceError)
-        // Continue without device enumeration
+        console.warn("[v2] Device enumeration failed:", deviceError)
       }
 
-      // Step 3: Build constraint options for Edge mobile
+      // Step 3: Build constraint options with camera preference
       const videoDevices = devices.filter(device => device.kind === 'videoinput')
       const constraintOptions: MediaStreamConstraints[] = []
 
-      if (browserInfo.isEdgeMobile) {
-        console.log("[v1] Building Edge mobile specific constraints...")
+      // Priority 1: Try specific camera type first
+      if (cameraToUse === "environment") {
+        // Try to find back camera by device ID
+        const backCamera = videoDevices.find(device => 
+          device.label.toLowerCase().includes('back') || 
+          device.label.toLowerCase().includes('rear') ||
+          device.label.toLowerCase().includes('environment') ||
+          device.label.toLowerCase().includes('0') // Often back camera is camera 0
+        )
         
-        // For Edge mobile, try very specific constraints
-        if (videoDevices.length > 0) {
-          // Try each device with minimal constraints
-          videoDevices.forEach((device, index) => {
-            if (device.deviceId) {
-              constraintOptions.push({
-                video: {
-                  deviceId: { exact: device.deviceId },
-                  width: { ideal: 640 },
-                  height: { ideal: 480 }
-                },
-                audio: false
-              })
-            }
+        if (backCamera?.deviceId) {
+          constraintOptions.push({
+            video: { deviceId: { exact: backCamera.deviceId } },
+            audio: false
           })
         }
         
-        // Edge mobile fallback constraints
-        constraintOptions.push(
-          {
-            video: {
-              facingMode: "environment",
-              width: { ideal: 640 },
-              height: { ideal: 480 }
-            },
-            audio: false
-          },
-          {
-            video: {
-              width: { ideal: 640 },
-              height: { ideal: 480 }
-            },
-            audio: false
-          },
-          {
-            video: {
-              facingMode: "user",
-              width: { ideal: 640 },
-              height: { ideal: 480 }
-            },
-            audio: false
-          }
-        )
+        // Fallback to facingMode
+        constraintOptions.push({
+          video: { facingMode: { exact: "environment" } },
+          audio: false
+        })
+        constraintOptions.push({
+          video: { facingMode: "environment" },
+          audio: false
+        })
       } else {
-        // Standard constraints for other browsers
-        if (videoDevices.length > 0) {
-          const backCamera = videoDevices.find(device => 
-            device.label.toLowerCase().includes('back') || 
-            device.label.toLowerCase().includes('rear') ||
-            device.label.toLowerCase().includes('environment')
-          )
-          
-          if (backCamera?.deviceId) {
-            constraintOptions.push({
-              video: { deviceId: { exact: backCamera.deviceId } },
-              audio: false
-            })
-          }
-
-          videoDevices.forEach(device => {
-            if (device.deviceId) {
-              constraintOptions.push({
-                video: { deviceId: { exact: device.deviceId } },
-                audio: false
-              })
-            }
+        // Try to find front camera
+        const frontCamera = videoDevices.find(device => 
+          device.label.toLowerCase().includes('front') || 
+          device.label.toLowerCase().includes('user') ||
+          device.label.toLowerCase().includes('1') // Often front camera is camera 1
+        )
+        
+        if (frontCamera?.deviceId) {
+          constraintOptions.push({
+            video: { deviceId: { exact: frontCamera.deviceId } },
+            audio: false
           })
         }
-
-        constraintOptions.push(
-          { video: { facingMode: "environment" }, audio: false },
-          { video: true, audio: false },
-          { video: { facingMode: "user" }, audio: false }
-        )
+        
+        constraintOptions.push({
+          video: { facingMode: { exact: "user" } },
+          audio: false
+        })
+        constraintOptions.push({
+          video: { facingMode: "user" },
+          audio: false
+        })
       }
 
-      // Step 4: Try constraints with timeout
-      console.log("[v1] Step 3: Trying camera constraints...")
+      // Priority 2: Try all available cameras by device ID
+      videoDevices.forEach(device => {
+        if (device.deviceId) {
+          constraintOptions.push({
+            video: { deviceId: { exact: device.deviceId } },
+            audio: false
+          })
+        }
+      })
+
+      // Priority 3: Fallback constraints
+      constraintOptions.push(
+        { video: { facingMode: "environment" }, audio: false },
+        { video: { facingMode: "user" }, audio: false },
+        { video: true, audio: false }
+      )
+
+      // Step 4: Try constraints
+      console.log("[v2] Step 2: Trying camera constraints...")
       let stream: MediaStream | null = null
       let lastError: Error | null = null
       const timeoutMs = browserInfo.isEdgeMobile ? 15000 : 10000
 
       for (let i = 0; i < constraintOptions.length; i++) {
         const constraints = constraintOptions[i]
-        console.log(`[v1] Trying constraint ${i + 1}/${constraintOptions.length}:`, constraints)
+        console.log(`[v2] Trying constraint ${i + 1}/${constraintOptions.length}:`, constraints)
 
         try {
           const timeoutPromise = new Promise<never>((_, reject) =>
@@ -238,22 +207,27 @@ export default function BarcodeScanPage() {
             timeoutPromise
           ])
 
-          console.log("[v1] Camera stream obtained:", stream)
+          console.log("[v2] Camera stream obtained:", stream)
           
           const videoTracks = stream.getVideoTracks()
           if (videoTracks.length === 0) {
-            console.warn("[v1] No video tracks in stream")
+            console.warn("[v2] No video tracks in stream")
             stream.getTracks().forEach(track => track.stop())
             throw new Error("Video track bulunamadı")
           }
           
-          console.log("[v1] Video track settings:", videoTracks[0].getSettings())
-          console.log("[v1] Video track capabilities:", videoTracks[0].getCapabilities?.())
+          const settings = videoTracks[0].getSettings()
+          console.log("[v2] Video track settings:", settings)
+          
+          // Update current camera state based on actual settings
+          if (settings.facingMode) {
+            setCurrentCamera(settings.facingMode as "environment" | "user")
+          }
           
           break // Success!
           
         } catch (err) {
-          console.warn(`[v1] Constraint ${i + 1} failed:`, err)
+          console.warn(`[v2] Constraint ${i + 1} failed:`, err)
           lastError = err instanceof Error ? err : new Error(String(err))
           
           if (stream) {
@@ -275,7 +249,7 @@ export default function BarcodeScanPage() {
       streamRef.current = stream
 
       // Step 5: Setup video element
-      console.log("[v1] Step 4: Setting up video element...")
+      console.log("[v2] Step 3: Setting up video element...")
       
       if (!videoRef.current) {
         throw new Error("Video elementi bulunamadı")
@@ -301,21 +275,21 @@ export default function BarcodeScanPage() {
         }
 
         const onLoadedMetadata = () => {
-          console.log("[v1] Video metadata loaded")
-          console.log("[v1] Video dimensions:", video.videoWidth, "x", video.videoHeight)
+          console.log("[v2] Video metadata loaded")
+          console.log("[v2] Video dimensions:", video.videoWidth, "x", video.videoHeight)
         }
 
         const onCanPlay = async () => {
-          console.log("[v1] Video can play")
+          console.log("[v2] Video can play")
           if (!resolved) {
             try {
               await video.play()
-              console.log("[v1] Video playing successfully")
+              console.log("[v2] Video playing successfully")
               resolved = true
               cleanup()
               resolve()
             } catch (playError) {
-              console.error("[v1] Video play failed:", playError)
+              console.error("[v2] Video play failed:", playError)
               cleanup()
               reject(new Error("Video oynatma başarısız: " + (playError as Error).message))
             }
@@ -323,7 +297,7 @@ export default function BarcodeScanPage() {
         }
 
         const onError = (event: Event) => {
-          console.error("[v1] Video error:", event)
+          console.error("[v2] Video error:", event)
           cleanup()
           if (!resolved) {
             resolved = true
@@ -332,7 +306,7 @@ export default function BarcodeScanPage() {
         }
 
         const onLoadStart = () => {
-          console.log("[v1] Video load start")
+          console.log("[v2] Video load start")
         }
 
         // Set up event listeners
@@ -347,7 +321,7 @@ export default function BarcodeScanPage() {
         // Timeout for video setup
         setTimeout(() => {
           if (!resolved) {
-            console.error("[v1] Video setup timeout")
+            console.error("[v2] Video setup timeout")
             cleanup()
             resolved = true
             reject(new Error("Video kurulum zaman aşımı"))
@@ -356,7 +330,7 @@ export default function BarcodeScanPage() {
       })
 
     } catch (err) {
-      console.error("[v1] Camera access error:", err)
+      console.error("[v2] Camera access error:", err)
       
       // Clean up any streams
       if (streamRef.current) {
@@ -399,6 +373,24 @@ export default function BarcodeScanPage() {
       setError(errorMessage)
       setIsScanning(false)
     }
+  }
+
+  const switchCamera = async () => {
+    console.log("[v2] ===== SWITCHING CAMERA =====")
+    console.log("[v2] Current camera:", currentCamera)
+    
+    // Stop current camera
+    stopCamera()
+    
+    // Wait a bit for camera to be released
+    await new Promise(resolve => setTimeout(resolve, 500))
+    
+    // Switch to opposite camera
+    const newCamera = currentCamera === "environment" ? "user" : "environment"
+    setCurrentCamera(newCamera)
+    
+    // Start camera with new preference
+    await startCamera(newCamera)
   }
 
   const stopCamera = () => {
@@ -574,6 +566,23 @@ export default function BarcodeScanPage() {
                     <div className="text-white text-sm bg-black/50 px-2 py-1 rounded">
                       Barkodu kamera görüş alanına getirin
                     </div>
+                  </div>
+                  
+                  {/* Camera Switch Button - Only show if multiple cameras available */}
+                  {availableCameras.length > 1 && (
+                    <Button
+                      onClick={switchCamera}
+                      size="sm"
+                      variant="secondary"
+                      className="absolute top-2 right-2 h-8 w-8 p-0 bg-black/70 hover:bg-black/90 border-white/20"
+                    >
+                      <RotateCcw className="h-4 w-4 text-white" />
+                    </Button>
+                  )}
+                  
+                  {/* Camera Type Indicator */}
+                  <div className="absolute bottom-2 left-2 bg-black/70 text-white text-xs px-2 py-1 rounded">
+                    {currentCamera === "environment" ? "Arka Kamera" : "Ön Kamera"}
                   </div>
                 </div>
                 <Button onClick={stopCamera} variant="outline" className="w-full bg-transparent">
