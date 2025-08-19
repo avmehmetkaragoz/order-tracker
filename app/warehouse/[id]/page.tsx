@@ -142,6 +142,33 @@ export default function WarehouseItemDetailPage({ params }: { params: Promise<{ 
           </div>
         </div>
 
+        {/* Product Actions */}
+        <div className="grid grid-cols-2 gap-3 mb-6">
+          <Button 
+            variant="outline" 
+            className="w-full bg-transparent"
+            onClick={() => {
+              // TODO: Implement product exit functionality
+              console.log("Ürün Çıkış clicked")
+            }}
+          >
+            <LogOut className="h-4 w-4 mr-2" />
+            Ürün Çıkış
+          </Button>
+          
+          <Button 
+            variant="outline" 
+            className="w-full bg-transparent"
+            onClick={() => {
+              // TODO: Implement product return functionality
+              console.log("Ürün İade clicked")
+            }}
+          >
+            <Undo2 className="h-4 w-4 mr-2" />
+            Ürün İade
+          </Button>
+        </div>
+
         {/* Item Details */}
         <Card className="mb-6">
           <CardHeader>
@@ -186,33 +213,6 @@ export default function WarehouseItemDetailPage({ params }: { params: Promise<{ 
                   {item.receivedDate ? formatDate(item.receivedDate) : "Belirtilmemiş"}
                 </div>
               </div>
-            </div>
-
-            {/* Product Actions */}
-            <div className="grid grid-cols-2 gap-3 pt-2">
-              <Button 
-                variant="outline" 
-                className="w-full bg-transparent"
-                onClick={() => {
-                  // TODO: Implement product exit functionality
-                  console.log("Ürün Çıkış clicked")
-                }}
-              >
-                <LogOut className="h-4 w-4 mr-2" />
-                Ürün Çıkış
-              </Button>
-              
-              <Button 
-                variant="outline" 
-                className="w-full bg-transparent"
-                onClick={() => {
-                  // TODO: Implement product return functionality
-                  console.log("Ürün İade clicked")
-                }}
-              >
-                <Undo2 className="h-4 w-4 mr-2" />
-                Ürün İade
-              </Button>
             </div>
 
             {item.notes && (
