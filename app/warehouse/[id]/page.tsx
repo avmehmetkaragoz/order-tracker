@@ -9,12 +9,15 @@ import { Badge } from "@/components/ui/badge"
 import { LoadingSpinner } from "@/components/loading-spinner"
 import { BarcodePrinter } from "@/components/barcode-printer"
 import { ArrowLeft, Package, History, Edit, TrendingDown, TrendingUp, RotateCcw, LogOut, Undo2 } from "lucide-react"
+import { ProductExitDialog, type ProductExitData } from "@/components/product-exit-dialog"
 
 export default function WarehouseItemDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id: itemId } = use(params)
   const [item, setItem] = useState<WarehouseItem | null>(null)
   const [movements, setMovements] = useState<StockMovement[]>([])
   const [isLoading, setIsLoading] = useState(true)
+  const [isExitDialogOpen, setIsExitDialogOpen] = useState(false)
+  const [isProcessing, setIsProcessing] = useState(false)
 
   useEffect(() => {
     loadItemData()
@@ -104,6 +107,35 @@ export default function WarehouseItemDetailPage({ params }: { params: Promise<{ 
     })
   }
 
+  const handleProductExit = async (exitData: ProductExitData) => {
+    if (!item) return
+
+    setIsProcessing(true)
+    try {
+      console.log("[v1] Processing product exit:", exitData)
+      
+      const updatedItem = await warehouseRepo.processProductExit(item.id, exitData)
+      
+      if (updatedItem) {
+        setItem(updatedItem)
+        // Reload movements to show the new exit record
+        const updatedMovements = await warehouseRepo.getStockMovements(item.id)
+        setMovements(updatedMovements)
+        
+        setIsExitDialogOpen(false)
+        console.log("[v1] Product exit processed successfully")
+      } else {
+        console.error("[v1] Failed to process product exit")
+        // TODO: Show error toast
+      }
+    } catch (error) {
+      console.error("[v1] Error processing product exit:", error)
+      // TODO: Show error toast
+    } finally {
+      setIsProcessing(false)
+    }
+  }
+
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -147,10 +179,8 @@ export default function WarehouseItemDetailPage({ params }: { params: Promise<{ 
           <Button 
             variant="outline" 
             className="w-full bg-transparent"
-            onClick={() => {
-              // TODO: Implement product exit functionality
-              console.log("Ürün Çıkış clicked")
-            }}
+            onClick={() => setIsExitDialogOpen(true)}
+            disabled={!item || (item.currentWeight || 0) <= 0}
           >
             <LogOut className="h-4 w-4 mr-2" />
             Ürün Çıkış
@@ -287,6 +317,16 @@ export default function WarehouseItemDetailPage({ params }: { params: Promise<{ 
             )}
           </CardContent>
         </Card>
+
+        {/* Product Exit Dialog */}
+        {item && (
+          <ProductExitDialog
+            open={isExitDialogOpen}
+            onOpenChange={setIsExitDialogOpen}
+            item={item}
+            onConfirm={handleProductExit}
+          />
+        )}
       </div>
     </div>
   )

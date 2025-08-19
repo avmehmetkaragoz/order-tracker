@@ -336,6 +336,95 @@ class WarehouseRepository {
     return this.getItemById(itemId)
   }
 
+  async processProductExit(
+    itemId: string,
+    exitData: {
+      weightExit: number
+      bobinExit: number
+      exitLocation: string
+      operatorName?: string
+      reason?: string
+      notes?: string
+    }
+  ): Promise<WarehouseItem | null> {
+    console.log("[v0] WarehouseRepository.processProductExit called with:", { itemId, exitData })
+    
+    const item = await this.getItemById(itemId)
+    if (!item) {
+      console.error("[v0] Item not found:", itemId)
+      return null
+    }
+
+    const newWeight = Math.max(0, (item.currentWeight || 0) - exitData.weightExit)
+    const newBobinCount = Math.max(0, (item.bobinCount || 0) - exitData.bobinExit)
+
+    // Determine new status
+    const status: WarehouseItemStatus = newWeight === 0 && newBobinCount === 0 ? "Stok Yok" : "Stokta"
+
+    // Create detailed notes
+    const exitLocationLabels: Record<string, string> = {
+      "matbaa-tamburlu": "Matbaa - Tamburlu",
+      "matbaa-bilgili": "Matbaa - Bilgili",
+      "kesim": "Kesim",
+      "sevkiyat": "Sevkiyat"
+    }
+
+    const exitLocationLabel = exitLocationLabels[exitData.exitLocation] || exitData.exitLocation
+    let movementNotes = `Çıkış: ${exitLocationLabel}`
+    
+    if (exitData.weightExit > 0) {
+      movementNotes += ` - ${exitData.weightExit}kg`
+    }
+    if (exitData.bobinExit > 0) {
+      movementNotes += ` - ${exitData.bobinExit} bobin`
+    }
+    if (exitData.reason) {
+      const reasonLabels: Record<string, string> = {
+        "satis": "Satış",
+        "transfer": "Transfer", 
+        "hasarli": "Hasarlı",
+        "uretim": "Üretim",
+        "diger": "Diğer"
+      }
+      movementNotes += ` (${reasonLabels[exitData.reason] || exitData.reason})`
+    }
+    if (exitData.notes) {
+      movementNotes += ` - ${exitData.notes}`
+    }
+
+    try {
+      // Add stock movement with detailed information
+      await this.addStockMovement({
+        warehouse_item_id: itemId,
+        type: "Çıkan",
+        quantity: -exitData.weightExit, // Negative for outgoing
+        operator: exitData.operatorName || "Bilinmeyen",
+        notes: movementNotes,
+      })
+
+      // Update warehouse item
+      const { data, error } = await supabase.from("warehouse_items").update({
+        current_weight: newWeight,
+        coil_count: newBobinCount,
+        status,
+        updated_at: new Date().toISOString(),
+      }).eq("id", itemId).select().single()
+
+      if (error) {
+        console.error("[v0] Error updating warehouse item:", error)
+        throw new Error(`Failed to update warehouse item: ${error.message}`)
+      }
+
+      console.log("[v0] Warehouse item updated successfully:", data)
+
+      // Return updated item
+      return this.getItemById(itemId)
+    } catch (error) {
+      console.error("[v0] Error in processProductExit:", error)
+      throw error
+    }
+  }
+
   async processReturn(
     itemId: string,
     weightReturned: number,
