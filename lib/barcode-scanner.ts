@@ -8,8 +8,11 @@ export class BarcodeScanner {
   private onScanCallback: ((barcode: string) => void) | null = null
 
   constructor() {
-    this.canvas = document.createElement("canvas")
-    this.context = this.canvas.getContext("2d")
+    // Initialize canvas only in browser environment
+    if (typeof window !== 'undefined' && typeof document !== 'undefined') {
+      this.canvas = document.createElement("canvas")
+      this.context = this.canvas?.getContext("2d") || null
+    }
   }
 
   async startScanning(
@@ -17,6 +20,25 @@ export class BarcodeScanner {
     onScan: (barcode: string) => void,
     onError?: (error: string) => void,
   ): Promise<void> {
+    console.log("[BarcodeScanner] startScanning called")
+    
+    // Ensure we're in browser environment
+    if (typeof window === 'undefined' || typeof navigator === 'undefined') {
+      onError?.("Tarayıcı ortamı gerekli")
+      return
+    }
+
+    // Initialize canvas if not already done
+    if (!this.canvas && typeof document !== 'undefined') {
+      this.canvas = document.createElement("canvas")
+      this.context = this.canvas?.getContext("2d") || null
+    }
+
+    if (!this.canvas || !this.context) {
+      onError?.("Canvas oluşturulamadı")
+      return
+    }
+
     this.video = videoElement
     this.onScanCallback = onScan
 

@@ -60,7 +60,25 @@ export default function BarcodeScanPage() {
   }
 
   const startCamera = async () => {
-    if (!videoRef.current || !scannerRef.current) return
+    console.log("[v1] startCamera called")
+    console.log("[v1] videoRef.current:", !!videoRef.current)
+    console.log("[v1] scannerRef.current:", !!scannerRef.current)
+    
+    if (!videoRef.current) {
+      setError("Video elementi bulunamadı")
+      return
+    }
+
+    if (!scannerRef.current) {
+      // Try to initialize scanner if not already done
+      if (typeof window !== 'undefined' && typeof document !== 'undefined') {
+        scannerRef.current = new BarcodeScanner()
+        console.log("[v1] BarcodeScanner re-initialized")
+      } else {
+        setError("Tarayıcı ortamı gerekli")
+        return
+      }
+    }
 
     setError(null)
     setIsScanning(true)
@@ -74,11 +92,13 @@ export default function BarcodeScanPage() {
           searchBarcode(barcode)
         },
         (errorMessage) => {
+          console.log("Kamera hatası:", errorMessage)
           setError(errorMessage)
           setIsScanning(false)
         }
       )
     } catch (err) {
+      console.error("startCamera error:", err)
       const errorMessage = err instanceof Error ? err.message : "Tarama başlatılamadı"
       setError(errorMessage)
       setIsScanning(false)
@@ -125,11 +145,14 @@ export default function BarcodeScanPage() {
   useEffect(() => {
     console.log("[v0] ===== BARCODE SCANNER COMPONENT MOUNTED =====")
     
-    // Initialize BarcodeScanner
-    scannerRef.current = new BarcodeScanner()
-    
     // Set browser info on client side only
     setBrowserInfo(checkBrowserCompatibility())
+    
+    // Initialize BarcodeScanner only in browser environment
+    if (typeof window !== 'undefined' && typeof document !== 'undefined') {
+      scannerRef.current = new BarcodeScanner()
+      console.log("[v0] BarcodeScanner initialized")
+    }
     
     // Check if we're in browser environment before accessing navigator
     if (typeof window !== 'undefined' && typeof navigator !== 'undefined') {
