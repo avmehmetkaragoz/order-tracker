@@ -64,8 +64,16 @@ export default function BarcodeScanPage() {
     console.log("[v1] videoRef.current:", !!videoRef.current)
     console.log("[v1] scannerRef.current:", !!scannerRef.current)
     
+    setError(null)
+    setIsScanning(true)
+
+    // Wait a bit for video element to be ready (especially on mobile)
+    await new Promise(resolve => setTimeout(resolve, 100))
+    
     if (!videoRef.current) {
-      setError("Video elementi bulunamadı")
+      console.log("[v1] Video element still not found after delay")
+      setError("Video elementi henüz hazır değil. Lütfen tekrar deneyin.")
+      setIsScanning(false)
       return
     }
 
@@ -76,14 +84,13 @@ export default function BarcodeScanPage() {
         console.log("[v1] BarcodeScanner re-initialized")
       } else {
         setError("Tarayıcı ortamı gerekli")
+        setIsScanning(false)
         return
       }
     }
 
-    setError(null)
-    setIsScanning(true)
-
     try {
+      console.log("[v1] Starting camera with video element:", videoRef.current)
       await scannerRef.current.startScanning(
         videoRef.current,
         (barcode) => {
