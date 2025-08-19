@@ -7,7 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge"
 import { LoadingSpinner } from "@/components/loading-spinner"
 import { KeyboardShortcuts } from "@/components/keyboard-shortcuts"
-import { Settings, Plus, BarChart3, Clock, CheckCircle, Warehouse } from "lucide-react"
+import { Settings, Plus, BarChart3, Clock, CheckCircle, Warehouse, QrCode } from "lucide-react"
 
 export default function HomePage() {
   const [isInitialized, setIsInitialized] = useState(false)
@@ -149,6 +149,17 @@ export default function HomePage() {
               Siparişleri Görüntüle
               <kbd className="ml-auto text-xs bg-muted px-1.5 py-0.5 rounded">H</kbd>
             </Button>
+            
+            <Button
+              variant="outline"
+              className="w-full bg-transparent"
+              size="lg"
+              onClick={() => (window.location.href = "/barcode-scanner")}
+            >
+              <QrCode className="h-4 w-4 mr-2" />
+              Barkod Okutma
+              <kbd className="ml-auto text-xs bg-muted px-1.5 py-0.5 rounded">B</kbd>
+            </Button>
           </CardContent>
         </Card>
 
@@ -216,16 +227,16 @@ export default function HomePage() {
                 <kbd className="bg-background px-1.5 py-0.5 rounded">N</kbd>
               </div>
               <div className="flex justify-between">
-                <span>Arama</span>
-                <kbd className="bg-background px-1.5 py-0.5 rounded">/</kbd>
+                <span>Barkod okutma</span>
+                <kbd className="bg-background px-1.5 py-0.5 rounded">B</kbd>
               </div>
               <div className="flex justify-between">
                 <span>Depo yönetimi</span>
                 <kbd className="bg-background px-1.5 py-0.5 rounded">W</kbd>
               </div>
               <div className="flex justify-between">
-                <span>Ana sayfa</span>
-                <kbd className="bg-background px-1.5 py-0.5 rounded">Ctrl+H</kbd>
+                <span>Arama</span>
+                <kbd className="bg-background px-1.5 py-0.5 rounded">/</kbd>
               </div>
               <div className="flex justify-between">
                 <span>Ayarlar</span>

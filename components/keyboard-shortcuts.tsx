@@ -22,6 +22,14 @@ export function KeyboardShortcuts() {
           event.preventDefault()
           router.push("/orders/new")
           break
+        case "b":
+          event.preventDefault()
+          router.push("/barcode-scanner")
+          break
+        case "w":
+          event.preventDefault()
+          router.push("/warehouse")
+          break
         case "/":
           event.preventDefault()
           // Focus search input if on orders page
@@ -42,6 +50,12 @@ export function KeyboardShortcuts() {
           if (event.ctrlKey || event.metaKey) {
             event.preventDefault()
             router.push("/settings")
+          }
+          break
+        case "a":
+          if (event.ctrlKey || event.metaKey) {
+            event.preventDefault()
+            router.push("/analytics")
           }
           break
       }
