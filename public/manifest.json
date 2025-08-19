@@ -1,0 +1,101 @@
+{
+  "name": "Sipariş Takip - Tedarikçi Sipariş Yönetimi",
+  "short_name": "Sipariş Takip",
+  "description": "Tedarikçi siparişlerini takip etmek için mobil uygulama. Offline çalışır, hızlı ve pratik.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#000000",
+  "theme_color": "#000000",
+  "orientation": "portrait-primary",
+  "scope": "/",
+  "lang": "tr",
+  "dir": "ltr",
+  "icons": [
+    {
+      "src": "/placeholder.svg?height=72&width=72",
+      "sizes": "72x72",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/placeholder.svg?height=96&width=96",
+      "sizes": "96x96",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/placeholder.svg?height=128&width=128",
+      "sizes": "128x128",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/placeholder.svg?height=144&width=144",
+      "sizes": "144x144",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/placeholder.svg?height=152&width=152",
+      "sizes": "152x152",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/placeholder.svg?height=192&width=192",
+      "sizes": "192x192",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/placeholder.svg?height=384&width=384",
+      "sizes": "384x384",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/placeholder.svg?height=512&width=512",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["business", "productivity", "utilities"],
+  "screenshots": [
+    {
+      "src": "/placeholder.svg?height=640&width=360",
+      "sizes": "360x640",
+      "type": "image/svg+xml",
+      "form_factor": "narrow"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Yeni Sipariş",
+      "short_name": "Yeni",
+      "description": "Hızlı sipariş oluştur",
+      "url": "/orders/new",
+      "icons": [
+        {
+          "src": "/placeholder.svg?height=96&width=96",
+          "sizes": "96x96",
+          "type": "image/svg+xml"
+        }
+      ]
+    },
+    {
+      "name": "Sipariş Listesi",
+      "short_name": "Liste",
+      "description": "Tüm siparişleri görüntüle",
+      "url": "/orders",
+      "icons": [
+        {
+          "src": "/placeholder.svg?height=96&width=96",
+          "sizes": "96x96",
+          "type": "image/svg+xml"
+        }
+      ]
+    }
+  ],
+  "prefer_related_applications": false
+}
