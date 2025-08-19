@@ -120,14 +120,40 @@ class WarehouseRepository {
   }
 
   async getItemByBarcode(barcode: string): Promise<WarehouseItem | null> {
+    console.log("[v0] WarehouseRepository.getItemByBarcode called with barcode:", barcode)
     const { data, error } = await supabase.from("warehouse_items").select("*").eq("barcode", barcode).single()
 
     if (error) {
-      console.error("Error fetching warehouse item by barcode:", error)
+      console.error("[v0] Error fetching warehouse item by barcode:", error)
       return null
     }
 
-    return data
+    console.log("[v0] Raw warehouse item data by barcode:", data)
+
+    if (!data) return null
+
+    // Map database fields to TypeScript types
+    const mappedItem: WarehouseItem = {
+      id: data.id,
+      barcode: data.barcode,
+      orderId: data.order_id,
+      material: data.material,
+      cm: data.cm,
+      mikron: data.mikron,
+      currentWeight: data.current_weight,
+      originalWeight: data.original_weight,
+      bobinCount: data.coil_count,
+      status: data.status,
+      location: data.location,
+      receivedDate: data.created_at,
+      lastMovementDate: data.updated_at,
+      supplier: data.supplier,
+      notes: data.notes,
+      tags: data.tags
+    }
+
+    console.log("[v0] Mapped warehouse item by barcode:", mappedItem)
+    return mappedItem
   }
 
   async getItemsByOrderId(orderId: string): Promise<WarehouseItem[]> {
@@ -141,7 +167,7 @@ class WarehouseRepository {
     return data || []
   }
 
-  async addItem(item: Omit<WarehouseItem, "id" | "barcode">): Promise<WarehouseItem> {
+  async addItem(item: Omit<WarehouseItem, "id" | "barcode"> & { barcode?: string }): Promise<WarehouseItem> {
     console.log("[v0] WarehouseRepository.addItem called with:", item)
     
     // Map TypeScript types to database fields
@@ -157,7 +183,7 @@ class WarehouseRepository {
       location: item.location || "Genel Depo", // Provide default value
       supplier: item.supplier,
       notes: item.notes,
-      barcode: this.generateBarcode(),
+      barcode: item.barcode || this.generateBarcode(),
     }
 
     console.log("[v0] Mapped database item:", dbItem)

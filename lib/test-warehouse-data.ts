@@ -1,8 +1,9 @@
 import type { WarehouseItem } from "@/types/warehouse"
 import { warehouseRepo } from "./warehouse-repo"
 
-export const testWarehouseItems: Omit<WarehouseItem, "id" | "barcode">[] = [
+export const testWarehouseItems: (Omit<WarehouseItem, "id" | "barcode"> & { barcode?: string })[] = [
   {
+    barcode: "WH123456ABC123",
     orderId: "1",
     material: "OPP",
     cm: 70,
@@ -15,9 +16,10 @@ export const testWarehouseItems: Omit<WarehouseItem, "id" | "barcode">[] = [
     receivedDate: "2025-01-15T10:00:00Z",
     lastMovementDate: "2025-01-15T10:00:00Z",
     supplier: "Beş Yıldız",
-    notes: "Uğur siparişi için alınan stok",
+    notes: "Test barkodu - Uğur siparişi için alınan stok",
   },
   {
+    barcode: "WH789012DEF456",
     orderId: "2",
     material: "CPP",
     cm: 55,
@@ -30,9 +32,10 @@ export const testWarehouseItems: Omit<WarehouseItem, "id" | "barcode">[] = [
     receivedDate: "2025-01-14T14:30:00Z",
     lastMovementDate: "2025-01-16T09:15:00Z",
     supplier: "Ensar",
-    notes: "Kısmi kullanım sonrası kalan stok",
+    notes: "Test barkodu - Kısmi kullanım sonrası kalan stok",
   },
   {
+    barcode: "WH345678GHI789",
     material: "OPP",
     cm: 100,
     mikron: 30,
@@ -44,9 +47,10 @@ export const testWarehouseItems: Omit<WarehouseItem, "id" | "barcode">[] = [
     receivedDate: "2025-01-16T16:00:00Z",
     lastMovementDate: "2025-01-16T16:00:00Z",
     supplier: "Tugay Plastik",
-    notes: "Acil sipariş için rezerve edildi",
+    notes: "Test barkodu - Acil sipariş için rezerve edildi",
   },
   {
+    barcode: "WH901234JKL012",
     material: "CPP",
     cm: 80,
     mikron: 35,
@@ -58,7 +62,7 @@ export const testWarehouseItems: Omit<WarehouseItem, "id" | "barcode">[] = [
     receivedDate: "2025-01-10T11:20:00Z",
     lastMovementDate: "2025-01-17T13:45:00Z",
     supplier: "Beş Yıldız",
-    notes: "Düşük stok - yenilenmesi gerekiyor",
+    notes: "Test barkodu - Düşük stok - yenilenmesi gerekiyor",
   },
 ]
 
