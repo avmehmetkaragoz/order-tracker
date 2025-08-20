@@ -17,8 +17,8 @@ export default function BarcodeScanPage() {
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [searchHistory, setSearchHistory] = useState<string[]>([])
-  const [currentCamera, setCurrentCamera] = useState<"environment" | "user">("environment")
   const [availableCameras, setAvailableCameras] = useState<MediaDeviceInfo[]>([])
+  const [selectedCameraId, setSelectedCameraId] = useState<string>("")
   const videoRef = useRef<HTMLVideoElement>(null)
   const scannerRef = useRef<BarcodeScanner | null>(null)
 
@@ -28,7 +28,8 @@ export default function BarcodeScanPage() {
     isHTTPS: false,
     isEdgeMobile: false,
     hasMediaDevices: false,
-    hasGetUserMedia: false
+    hasGetUserMedia: false,
+    zxingSupported: false
   })
 
   const checkBrowserCompatibility = () => {
@@ -40,7 +41,8 @@ export default function BarcodeScanPage() {
         isHTTPS: false,
         isEdgeMobile: false,
         hasMediaDevices: false,
-        hasGetUserMedia: false
+        hasGetUserMedia: false,
+        zxingSupported: false
       }
     }
 
@@ -55,23 +57,32 @@ export default function BarcodeScanPage() {
       isHTTPS,
       isEdgeMobile: isEdge && isMobile,
       hasMediaDevices: !!navigator.mediaDevices,
-      hasGetUserMedia: !!navigator.mediaDevices?.getUserMedia
+      hasGetUserMedia: !!navigator.mediaDevices?.getUserMedia,
+      zxingSupported: BarcodeScanner.isSupported()
     }
   }
 
   const startCamera = async () => {
-    console.log("[v1] startCamera called")
-    console.log("[v1] videoRef.current:", !!videoRef.current)
-    console.log("[v1] scannerRef.current:", !!scannerRef.current)
+    console.log("[ZXing] startCamera called")
+    console.log("[ZXing] videoRef.current:", !!videoRef.current)
+    console.log("[ZXing] scannerRef.current:", !!scannerRef.current)
+    console.log("[ZXing] ZXing supported:", BarcodeScanner.isSupported())
     
     setError(null)
     setIsScanning(true)
+
+    // Check ZXing support
+    if (!BarcodeScanner.isSupported()) {
+      setError("ZXing kütüphanesi desteklenmiyor. Lütfen tarayıcınızı güncelleyin.")
+      setIsScanning(false)
+      return
+    }
 
     // Wait a bit for video element to be ready (especially on mobile)
     await new Promise(resolve => setTimeout(resolve, 100))
     
     if (!videoRef.current) {
-      console.log("[v1] Video element still not found after delay")
+      console.log("[ZXing] Video element still not found after delay")
       setError("Video elementi henüz hazır değil. Lütfen tekrar deneyin.")
       setIsScanning(false)
       return
@@ -81,7 +92,7 @@ export default function BarcodeScanPage() {
       // Try to initialize scanner if not already done
       if (typeof window !== 'undefined' && typeof document !== 'undefined') {
         scannerRef.current = new BarcodeScanner()
-        console.log("[v1] BarcodeScanner re-initialized")
+        console.log("[ZXing] BarcodeScanner initialized")
       } else {
         setError("Tarayıcı ortamı gerekli")
         setIsScanning(false)
@@ -90,11 +101,11 @@ export default function BarcodeScanPage() {
     }
 
     try {
-      console.log("[v1] Starting camera with video element:", videoRef.current)
+      console.log("[ZXing] Starting camera with video element:", videoRef.current)
       await scannerRef.current.startScanning(
         videoRef.current,
         (barcode) => {
-          console.log("Barkod algılandı:", barcode)
+          console.log("Barkod algılandı (ZXing):", barcode)
           setIsScanning(false)
           searchBarcode(barcode)
         },
@@ -150,7 +161,7 @@ export default function BarcodeScanPage() {
   }
 
   useEffect(() => {
-    console.log("[v0] ===== BARCODE SCANNER COMPONENT MOUNTED =====")
+    console.log("[ZXing] ===== BARCODE SCANNER COMPONENT MOUNTED =====")
     
     // Set browser info on client side only
     setBrowserInfo(checkBrowserCompatibility())
@@ -158,21 +169,50 @@ export default function BarcodeScanPage() {
     // Initialize BarcodeScanner only in browser environment
     if (typeof window !== 'undefined' && typeof document !== 'undefined') {
       scannerRef.current = new BarcodeScanner()
-      console.log("[v0] BarcodeScanner initialized")
+      console.log("[ZXing] BarcodeScanner initialized")
+      
+      // Load available cameras
+      loadAvailableCameras()
     }
     
     // Check if we're in browser environment before accessing navigator
     if (typeof window !== 'undefined' && typeof navigator !== 'undefined') {
-      console.log("[v0] Navigator userAgent:", navigator.userAgent)
-      console.log("[v0] MediaDevices available:", !!navigator.mediaDevices)
-      console.log("[v0] getUserMedia available:", !!navigator.mediaDevices?.getUserMedia)
+      console.log("[ZXing] Navigator userAgent:", navigator.userAgent)
+      console.log("[ZXing] MediaDevices available:", !!navigator.mediaDevices)
+      console.log("[ZXing] getUserMedia available:", !!navigator.mediaDevices?.getUserMedia)
+      console.log("[ZXing] ZXing supported:", BarcodeScanner.isSupported())
     }
 
     return () => {
-      console.log("[v0] ===== BARCODE SCANNER COMPONENT UNMOUNTING =====")
+      console.log("[ZXing] ===== BARCODE SCANNER COMPONENT UNMOUNTING =====")
       stopCamera()
     }
   }, [])
+
+  const loadAvailableCameras = async () => {
+    if (scannerRef.current) {
+      try {
+        const cameras = await scannerRef.current.getAvailableCameras()
+        setAvailableCameras(cameras)
+        console.log("[ZXing] Available cameras:", cameras.length)
+      } catch (error) {
+        console.log("Error loading cameras:", error)
+      }
+    }
+  }
+
+  const switchCamera = async (deviceId: string) => {
+    if (scannerRef.current && isScanning) {
+      try {
+        await scannerRef.current.switchCamera(deviceId)
+        setSelectedCameraId(deviceId)
+        console.log("[ZXing] Switched to camera:", deviceId)
+      } catch (error) {
+        console.error("Error switching camera:", error)
+        setError("Kamera değiştirilemedi")
+      }
+    }
+  }
 
   const getStatusInTurkish = (status: string) => {
     const statusMap: { [key: string]: string } = {
@@ -240,12 +280,38 @@ export default function BarcodeScanPage() {
           </Card>
         )}
 
+        {/* ZXing Support Warning */}
+        {!browserInfo.zxingSupported && (
+          <Card className="mb-6 border-yellow-500 bg-yellow-50 dark:bg-yellow-950">
+            <CardHeader>
+              <CardTitle className="text-yellow-700 dark:text-yellow-300 text-sm flex items-center gap-2">
+                <Package className="h-4 w-4" />
+                Barkod Tarama Desteği
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="text-sm text-yellow-600 dark:text-yellow-400">
+              <p className="mb-2">ZXing kütüphanesi yüklenemedi. Manuel arama kullanın.</p>
+              <p className="mb-2"><strong>Olası nedenler:</strong></p>
+              <ul className="list-disc list-inside space-y-1 text-xs">
+                <li>Tarayıcı eski sürüm</li>
+                <li>JavaScript devre dışı</li>
+                <li>Ağ bağlantısı sorunu</li>
+              </ul>
+            </CardContent>
+          </Card>
+        )}
+
         {/* Camera Scanner */}
         <Card className="mb-6">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Camera className="h-5 w-5" />
               Kamera Tarama
+              {browserInfo.zxingSupported && (
+                <span className="text-xs bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300 px-2 py-1 rounded">
+                  ZXing Aktif
+                </span>
+              )}
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -253,14 +319,35 @@ export default function BarcodeScanPage() {
               <div className="space-y-3">
                 <Button
                   onClick={() => {
-                    console.log("[v1] ===== CAMERA START BUTTON CLICKED =====")
+                    console.log("[ZXing] ===== CAMERA START BUTTON CLICKED =====")
                     startCamera()
                   }}
                   className="w-full"
+                  disabled={!browserInfo.zxingSupported}
                 >
                   <Camera className="h-4 w-4 mr-2" />
-                  Kamerayı Başlat
+                  {browserInfo.zxingSupported ? "Kamerayı Başlat" : "Kamera Desteği Yok"}
                 </Button>
+                
+                {/* Camera selection */}
+                {availableCameras.length > 1 && (
+                  <div className="space-y-2">
+                    <p className="text-xs text-muted-foreground">Kamera Seçimi:</p>
+                    <div className="grid grid-cols-1 gap-2">
+                      {availableCameras.map((camera, index) => (
+                        <Button
+                          key={camera.deviceId}
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setSelectedCameraId(camera.deviceId)}
+                          className={`text-xs ${selectedCameraId === camera.deviceId ? 'bg-primary text-primary-foreground' : ''}`}
+                        >
+                          {camera.label || `Kamera ${index + 1}`}
+                        </Button>
+                      ))}
+                    </div>
+                  </div>
+                )}
                 
                 {/* Show additional info for Edge mobile */}
                 {browserInfo.isEdgeMobile && (
@@ -280,16 +367,49 @@ export default function BarcodeScanPage() {
                     muted
                     controls={false}
                   />
-                  <div className="absolute inset-0 border-2 border-dashed border-white/50 rounded-lg flex items-center justify-center">
+                  <div className="absolute inset-0 border-2 border-dashed border-white/50 rounded-lg flex items-center justify-center pointer-events-none">
                     <div className="text-white text-sm bg-black/50 px-2 py-1 rounded">
                       Barkodu kamera görüş alanına getirin
                     </div>
                   </div>
                   
+                  {/* Camera switch buttons */}
+                  {availableCameras.length > 1 && (
+                    <div className="absolute top-2 right-2 space-y-1">
+                      {availableCameras.map((camera, index) => (
+                        <Button
+                          key={camera.deviceId}
+                          variant="secondary"
+                          size="sm"
+                          onClick={() => switchCamera(camera.deviceId)}
+                          className="text-xs p-1 h-6"
+                        >
+                          <RotateCcw className="h-3 w-3" />
+                        </Button>
+                      ))}
+                    </div>
+                  )}
                 </div>
-                <Button onClick={stopCamera} variant="outline" className="w-full bg-transparent">
-                  Kamerayı Durdur
-                </Button>
+                
+                <div className="flex gap-2">
+                  <Button onClick={stopCamera} variant="outline" className="flex-1">
+                    Kamerayı Durdur
+                  </Button>
+                  {scannerRef.current && (
+                    <Button 
+                      variant="ghost" 
+                      size="sm"
+                      onClick={() => {
+                        const info = scannerRef.current?.getInfo()
+                        console.log("Scanner Info:", info)
+                        alert(`Scanner Bilgisi:\n${JSON.stringify(info, null, 2)}`)
+                      }}
+                      className="text-xs"
+                    >
+                      Debug
+                    </Button>
+                  )}
+                </div>
               </div>
             )}
           </CardContent>
