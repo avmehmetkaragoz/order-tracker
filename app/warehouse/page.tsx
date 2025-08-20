@@ -5,6 +5,7 @@ import type React from "react"
 import { useEffect, useState } from "react"
 import { warehouseRepo } from "@/lib/warehouse-repo"
 import { OrderWarehouseIntegration } from "@/lib/order-warehouse-integration"
+import { ordersRepo } from "@/lib/orders-repo"
 import type { WarehouseItem, WarehouseFilters, WarehouseSummary } from "@/types/warehouse"
 import type { Order } from "@/types/order"
 import { Button } from "@/components/ui/button"
@@ -13,6 +14,7 @@ import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { LoadingSpinner } from "@/components/loading-spinner"
 import { Checkbox } from "@/components/ui/checkbox"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useToast } from "@/hooks/use-toast"
 import {
   Package,
@@ -34,6 +36,7 @@ import {
 
 export default function WarehousePage() {
   const [items, setItems] = useState<WarehouseItem[]>([])
+  const [allItems, setAllItems] = useState<WarehouseItem[]>([]) // Store all items for filtering
   const [summary, setSummary] = useState<WarehouseSummary | null>(null)
   const [orderSummary, setOrderSummary] = useState<any>(null)
   const [undeliveredOrders, setUndeliveredOrders] = useState<Order[]>([])
@@ -42,11 +45,18 @@ export default function WarehousePage() {
   const [searchTerm, setSearchTerm] = useState("")
   const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set())
   const [isSelectionMode, setIsSelectionMode] = useState(false)
+  const [orderDetails, setOrderDetails] = useState<Record<string, Order>>({})
+  const [activeTab, setActiveTab] = useState<'all' | 'general' | 'customer'>('all')
   const { toast } = useToast()
 
   useEffect(() => {
     loadWarehouseData()
   }, [filters])
+
+  // Filter items based on active tab
+  useEffect(() => {
+    filterItemsByTab()
+  }, [allItems, activeTab])
 
   const loadWarehouseData = async () => {
     setIsLoading(true)
@@ -56,9 +66,32 @@ export default function WarehousePage() {
         warehouseRepo.getWarehouseSummary(),
         OrderWarehouseIntegration.getOrderWarehouseSummary(),
       ])
-      setItems(warehouseItems)
+      setAllItems(warehouseItems) // Store all items
+      setItems(warehouseItems) // Initially show all items
       setSummary(warehouseSummary)
       setOrderSummary(orderWarehouseSummary)
+
+      // Load order details for items that have orderId
+      const orderIds = warehouseItems.filter(item => item.orderId).map(item => item.orderId!)
+      const uniqueOrderIds = [...new Set(orderIds)]
+      
+      if (uniqueOrderIds.length > 0) {
+        try {
+          const orderDetailsMap: Record<string, Order> = {}
+          for (const orderId of uniqueOrderIds) {
+            const order = await ordersRepo.get(orderId)
+            if (order) {
+              orderDetailsMap[orderId] = order
+            }
+          }
+          setOrderDetails(orderDetailsMap)
+        } catch (error) {
+          console.error("Error loading order details:", error)
+          setOrderDetails({})
+        }
+      } else {
+        setOrderDetails({})
+      }
 
       try {
         const receivableOrders = await OrderWarehouseIntegration.getReceivableOrders()
@@ -75,14 +108,40 @@ export default function WarehousePage() {
       setSummary(null)
       setOrderSummary(null)
       setUndeliveredOrders([])
+      setOrderDetails({})
     } finally {
       setIsLoading(false)
     }
   }
 
+  const filterItemsByTab = () => {
+    let filteredItems = allItems
+    
+    switch (activeTab) {
+      case 'general':
+        filteredItems = allItems.filter(item => item.stockType === 'general')
+        break
+      case 'customer':
+        filteredItems = allItems.filter(item => item.stockType === 'customer')
+        break
+      case 'all':
+      default:
+        filteredItems = allItems
+        break
+    }
+    
+    setItems(filteredItems)
+  }
+
   const handleSearch = (value: string) => {
     setSearchTerm(value)
     setFilters({ ...filters, search: value })
+  }
+
+  const getStockTypeCounts = () => {
+    const generalCount = allItems.filter(item => item.stockType === 'general').length
+    const customerCount = allItems.filter(item => item.stockType === 'customer').length
+    return { generalCount, customerCount, totalCount: allItems.length }
   }
 
   const getStatusColor = (status: string) => {
@@ -384,6 +443,21 @@ export default function WarehousePage() {
           </Card>
         )}
 
+        {/* Stock Type Tabs */}
+        <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as 'all' | 'general' | 'customer')} className="mb-6">
+          <TabsList className="grid w-full grid-cols-3">
+            <TabsTrigger value="all" className="text-xs">
+              Tümü ({getStockTypeCounts().totalCount})
+            </TabsTrigger>
+            <TabsTrigger value="general" className="text-xs">
+              Genel Stok ({getStockTypeCounts().generalCount})
+            </TabsTrigger>
+            <TabsTrigger value="customer" className="text-xs">
+              Müşteri Stokları ({getStockTypeCounts().customerCount})
+            </TabsTrigger>
+          </TabsList>
+        </Tabs>
+
         {/* Search and Actions */}
         <div className="space-y-3 mb-6">
           <div className="relative">
@@ -396,7 +470,7 @@ export default function WarehousePage() {
             />
           </div>
 
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-2 gap-2">
             <Button
               variant="outline"
               size="sm"
@@ -410,15 +484,6 @@ export default function WarehousePage() {
               variant="outline"
               size="sm"
               className="bg-transparent"
-              onClick={() => (window.location.href = "/warehouse/receive")}
-            >
-              <Truck className="h-4 w-4 mr-1" />
-              Sipariş Kabul
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              className="bg-transparent"
               onClick={() => (window.location.href = "/barcode-scanner")}
             >
               <QrCode className="h-4 w-4 mr-1" />
@@ -427,24 +492,6 @@ export default function WarehousePage() {
           </div>
         </div>
 
-        {/* Test Data Button */}
-        {items.length === 0 && (
-          <Card className="mb-6">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Package className="h-5 w-5" />
-                Depo Boş
-              </CardTitle>
-              <CardDescription>Yeni ürün ekleyerek depo yönetimine başlayın</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Button onClick={() => (window.location.href = "/warehouse/new")} className="w-full">
-                <Plus className="h-4 w-4 mr-2" />
-                İlk Ürünü Ekle
-              </Button>
-            </CardContent>
-          </Card>
-        )}
 
         {/* Warehouse Items List */}
         <div className="space-y-3">
@@ -479,15 +526,25 @@ export default function WarehousePage() {
                       <div className="flex items-center gap-2">
                         <div className={`w-3 h-3 rounded-full ${getStatusColor(item.status)}`} />
                         <span className="font-medium text-sm">{item.supplier}</span>
+                        {item.stockType === 'customer' && (
+                          <Badge variant="secondary" className="text-xs bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300">
+                            {item.customerName || 'Müşteri'}
+                          </Badge>
+                        )}
+                        {item.stockType === 'general' && (
+                          <Badge variant="outline" className="text-xs text-green-600 border-green-600">
+                            Genel
+                          </Badge>
+                        )}
                         {item.orderId && (
                           <Badge variant="outline" className="text-xs">
-                            Sipariş Bağlantılı
+                            Sipariş
                           </Badge>
                         )}
                       </div>
                       <div className="flex items-center gap-2">
                         <Badge variant="outline" className="text-xs">
-                          {item.location || "Konum yok"}
+                          {item.location === "Genel Depo" ? "Depo" : (item.location || "Konum yok")}
                         </Badge>
                         {!isSelectionMode && (
                           <div className="flex items-center gap-1">
@@ -523,6 +580,12 @@ export default function WarehousePage() {
                         </span>
                         <span>{item.bobinCount || 0} bobin</span>
                       </div>
+                      {/* Customer info if available */}
+                      {item.orderId && orderDetails[item.orderId]?.customer && (
+                        <div className="mt-1 text-xs text-blue-600 dark:text-blue-400">
+                          {orderDetails[item.orderId].customer}
+                        </div>
+                      )}
                     </div>
 
                     {/* Status and Barcode */}

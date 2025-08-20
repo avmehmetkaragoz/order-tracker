@@ -69,7 +69,10 @@ class WarehouseRepository {
       currentWeight: item.current_weight,
       originalWeight: item.original_weight,
       bobinCount: item.coil_count,
+      originalBobinCount: item.original_coil_count || item.coil_count, // Use original_coil_count from DB
       status: item.status,
+      stockType: item.stock_type || 'general', // Map stock_type from DB
+      customerName: item.customer_name, // Map customer_name from DB
       location: item.location,
       receivedDate: item.created_at,
       lastMovementDate: item.updated_at,
@@ -106,7 +109,10 @@ class WarehouseRepository {
       currentWeight: data.current_weight,
       originalWeight: data.original_weight,
       bobinCount: data.coil_count,
+      originalBobinCount: data.original_coil_count || data.coil_count, // Use original_coil_count from DB
       status: data.status,
+      stockType: data.stock_type || 'general', // Map stock_type from DB
+      customerName: data.customer_name, // Map customer_name from DB
       location: data.location,
       receivedDate: data.created_at, // Using created_at as receivedDate since received_date doesn't exist
       lastMovementDate: data.updated_at,
@@ -143,7 +149,10 @@ class WarehouseRepository {
       currentWeight: data.current_weight,
       originalWeight: data.original_weight,
       bobinCount: data.coil_count,
+      originalBobinCount: data.original_coil_count || data.coil_count, // Use original_coil_count from DB
       status: data.status,
+      stockType: data.stock_type || 'general', // Map stock_type from DB
+      customerName: data.customer_name, // Map customer_name from DB
       location: data.location,
       receivedDate: data.created_at,
       lastMovementDate: data.updated_at,
@@ -179,8 +188,11 @@ class WarehouseRepository {
       current_weight: item.currentWeight,
       original_weight: item.originalWeight,
       coil_count: item.bobinCount,
+      original_coil_count: item.bobinCount, // Set original coil count for new items
       status: item.status,
-      location: item.location || "Genel Depo", // Provide default value
+      stock_type: item.stockType || 'general', // Map stock_type to DB
+      customer_name: item.customerName, // Map customer_name to DB
+      location: item.location || "Depo", // Provide default value
       supplier: item.supplier,
       notes: item.notes,
       barcode: item.barcode || this.generateBarcode(),
@@ -223,6 +235,75 @@ class WarehouseRepository {
     }
 
     return data
+  }
+
+  async updateItemDetails(
+    itemId: string,
+    editData: {
+      currentWeight: number
+      bobinCount: number
+      location: string
+      status: string
+      notes: string
+    }
+  ): Promise<WarehouseItem | null> {
+    console.log("[v0] WarehouseRepository.updateItemDetails called with:", { itemId, editData })
+    
+    const item = await this.getItemById(itemId)
+    if (!item) {
+      console.error("[v0] Item not found:", itemId)
+      return null
+    }
+
+    const oldWeight = item.currentWeight || 0
+    const oldBobinCount = item.bobinCount || 0
+    const weightDifference = editData.currentWeight - oldWeight
+    const bobinDifference = editData.bobinCount - oldBobinCount
+
+    try {
+      // Update warehouse item with database field names
+      const { data, error } = await supabase.from("warehouse_items").update({
+        current_weight: editData.currentWeight,
+        coil_count: editData.bobinCount,
+        location: editData.location,
+        status: editData.status,
+        notes: editData.notes,
+        updated_at: new Date().toISOString(),
+      }).eq("id", itemId).select().single()
+
+      if (error) {
+        console.error("[v0] Error updating warehouse item:", error)
+        throw new Error(`Failed to update warehouse item: ${error.message}`)
+      }
+
+      // Create stock movement if weight or bobin count changed
+      if (weightDifference !== 0 || bobinDifference !== 0) {
+        let movementNotes = "Ürün bilgileri güncellendi"
+        
+        if (weightDifference !== 0) {
+          movementNotes += ` - Ağırlık: ${oldWeight}kg → ${editData.currentWeight}kg`
+        }
+        if (bobinDifference !== 0) {
+          movementNotes += ` - Bobin: ${oldBobinCount} → ${editData.bobinCount}`
+        }
+
+        await this.addStockMovement({
+          warehouse_item_id: itemId,
+          type: weightDifference > 0 ? "Gelen" : "Çıkan",
+          quantity: weightDifference,
+          operator: "Sistem",
+          notes: movementNotes,
+        })
+      }
+
+      console.log("[v0] Warehouse item updated successfully:", data)
+
+      // Return updated item
+      return this.getItemById(itemId)
+    } catch (error) {
+      console.error("[v0] Error in updateItemDetails:", error)
+      throw error
+    }
   }
 
   async deleteItem(id: string): Promise<boolean> {
@@ -336,6 +417,95 @@ class WarehouseRepository {
     return this.getItemById(itemId)
   }
 
+  async processProductReturn(
+    itemId: string,
+    returnData: {
+      returnWeight: number
+      returnBobinCount: number
+      operatorName?: string
+      condition: string
+      notes?: string
+      generateReturnBarcode: boolean
+      stockType: 'general' | 'customer'
+      customerName?: string
+    }
+  ): Promise<WarehouseItem | null> {
+    console.log("[v0] WarehouseRepository.processProductReturn called with:", { itemId, returnData })
+    
+    const item = await this.getItemById(itemId)
+    if (!item) {
+      console.error("[v0] Item not found:", itemId)
+      return null
+    }
+
+    const currentWeight = item.currentWeight || 0
+    const currentBobinCount = item.bobinCount || 0
+
+    const newWeight = currentWeight + returnData.returnWeight
+    const newBobinCount = currentBobinCount + returnData.returnBobinCount
+
+    // Determine new status - if any stock returns, it should be "Stokta"
+    const status: WarehouseItemStatus = "Stokta"
+
+    // Create detailed notes for the return
+    const conditionLabels: Record<string, string> = {
+      "kullanilabilir": "Kullanılabilir",
+      "hasarli": "Hasarlı", 
+      "kontrol-gerekli": "Kontrol Gerekli"
+    }
+
+    const conditionLabel = conditionLabels[returnData.condition] || returnData.condition
+    let movementNotes = `Ürün dönüş - Depo - ${returnData.returnWeight}kg, ${returnData.returnBobinCount} bobin (${conditionLabel})`
+    
+    if (returnData.notes) {
+      movementNotes += ` - ${returnData.notes}`
+    }
+
+    try {
+      // Add stock movement for the return
+      await this.addStockMovement({
+        warehouse_item_id: itemId,
+        type: "Gelen", // Return to warehouse is incoming
+        quantity: returnData.returnWeight,
+        operator: returnData.operatorName || "",
+        notes: movementNotes,
+      })
+
+      // Prepare notes based on stock type
+      let itemNotes = `Dönen ürün (${conditionLabel})`
+      if (returnData.stockType === 'customer' && returnData.customerName) {
+        itemNotes = `${returnData.customerName} - ${itemNotes}`
+      } else {
+        itemNotes = `Genel stok - ${itemNotes}`
+      }
+
+      // Update warehouse item with new stock type information
+      const { data, error } = await supabase.from("warehouse_items").update({
+        current_weight: newWeight,
+        coil_count: newBobinCount,
+        status,
+        stock_type: returnData.stockType, // Set the stock type
+        customer_name: returnData.stockType === 'customer' ? returnData.customerName : null, // Set customer name if customer stock
+        location: "Depo", // Always return to main warehouse
+        notes: itemNotes,
+        updated_at: new Date().toISOString(),
+      }).eq("id", itemId).select().single()
+
+      if (error) {
+        console.error("[v0] Error updating warehouse item:", error)
+        throw new Error(`Failed to update warehouse item: ${error.message}`)
+      }
+
+      console.log("[v0] Warehouse item updated successfully:", data)
+
+      // Return updated item
+      return this.getItemById(itemId)
+    } catch (error) {
+      console.error("[v0] Error in processProductReturn:", error)
+      throw error
+    }
+  }
+
   async processProductExit(
     itemId: string,
     exitData: {
@@ -418,7 +588,7 @@ class WarehouseRepository {
         warehouse_item_id: itemId,
         type: "Çıkan",
         quantity: -totalWeightExit, // Use calculated total weight (negative for outgoing)
-        operator: exitData.operatorName || "Bilinmeyen",
+        operator: exitData.operatorName || "",
         notes: movementNotes,
       })
 
@@ -481,6 +651,55 @@ class WarehouseRepository {
 
     // Return mapped item
     return this.getItemById(itemId)
+  }
+
+  async getAvailableStockBySpecs(cm: number, mikron: number, material: string): Promise<WarehouseItem[]> {
+    console.log("[v0] WarehouseRepository.getAvailableStockBySpecs called with:", { cm, mikron, material })
+    
+    const { data, error } = await supabase
+      .from("warehouse_items")
+      .select("*")
+      .eq("cm", cm)
+      .eq("mikron", mikron)
+      .eq("material", material)
+      .eq("status", "Stokta")
+      .gt("current_weight", 0)
+      .order("created_at", { ascending: true }) // FIFO mantığı - eski stok önce kullanılır
+
+    if (error) {
+      console.error("[v0] Error fetching available stock by specs:", error)
+      return []
+    }
+
+    console.log("[v0] Found", data?.length || 0, "available stock items")
+
+    if (!data) return []
+
+    // Map database fields to TypeScript types
+    const mappedItems: WarehouseItem[] = data.map(item => ({
+      id: item.id,
+      barcode: item.barcode,
+      orderId: item.order_id,
+      material: item.material,
+      cm: item.cm,
+      mikron: item.mikron,
+      currentWeight: item.current_weight,
+      originalWeight: item.original_weight,
+      bobinCount: item.coil_count,
+      originalBobinCount: item.original_coil_count || item.coil_count, // Use original_coil_count from DB
+      status: item.status,
+      stockType: item.stock_type || 'general', // Map stock_type from DB
+      customerName: item.customer_name, // Map customer_name from DB
+      location: item.location,
+      receivedDate: item.created_at,
+      lastMovementDate: item.updated_at,
+      supplier: item.supplier,
+      notes: item.notes,
+      tags: item.tags
+    }))
+
+    console.log("[v0] Mapped available stock items:", mappedItems)
+    return mappedItems
   }
 
   async getWarehouseSummary(): Promise<WarehouseSummary> {

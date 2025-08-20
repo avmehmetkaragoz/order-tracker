@@ -2,6 +2,8 @@ export type WarehouseItemStatus = "Stokta" | "Rezerve" | "Stok Yok" | "Hasarlı"
 
 export type StockMovementType = "Gelen" | "Çıkan" | "İade" | "Düzeltme" | "Hasarlı"
 
+export type StockType = "general" | "customer"
+
 export type WarehouseItem = {
   id: string
   barcode: string
@@ -11,8 +13,11 @@ export type WarehouseItem = {
   mikron: number
   currentWeight: number // Current weight in kg
   originalWeight: number // Original weight when received
-  bobinCount: number
+  bobinCount: number // Current coil count
+  originalBobinCount?: number // Original coil count when received
   status: WarehouseItemStatus
+  stockType: StockType // Whether this is general or customer-specific stock
+  customerName?: string // Customer name if this is customer stock
   location?: string // Warehouse location/shelf
   receivedDate: string
   lastMovementDate: string

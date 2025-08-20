@@ -18,6 +18,7 @@ interface BarcodePrinterProps {
   date: string
   coilCount?: number
   showCoilBarcodes?: boolean
+  customer?: string
 }
 
 export function BarcodePrinter({
@@ -29,6 +30,7 @@ export function BarcodePrinter({
   date,
   coilCount = 1,
   showCoilBarcodes = false,
+  customer,
 }: BarcodePrinterProps) {
   const { toast } = useToast()
   const [isGenerating, setIsGenerating] = useState(false)
@@ -43,6 +45,7 @@ export function BarcodePrinter({
         weight,
         supplier,
         date,
+        customer,
       })
 
       // Open print window
@@ -87,6 +90,7 @@ export function BarcodePrinter({
         coilCount,
         supplier,
         date,
+        customer,
       })
 
       // Open print window
@@ -128,6 +132,7 @@ export function BarcodePrinter({
       weight,
       supplier,
       date,
+      customer,
     })
 
     const blob = new Blob([printableHTML], { type: "text/html" })
@@ -154,6 +159,7 @@ export function BarcodePrinter({
       weight,
       supplier,
       date,
+      customer,
     })
 
     const previewWindow = window.open("", "_blank")
@@ -197,6 +203,12 @@ export function BarcodePrinter({
                 <span>Tedarikçi:</span>
                 <span>{supplier}</span>
               </div>
+              {customer && (
+                <div className="flex justify-between">
+                  <span>Müşteri:</span>
+                  <span className="font-medium text-blue-600 dark:text-blue-400">{customer}</span>
+                </div>
+              )}
               <div className="flex justify-between">
                 <span>Tarih:</span>
                 <span>{date}</span>

@@ -168,6 +168,7 @@ export class BarcodeGenerator {
     weight: number
     supplier: string
     date: string
+    customer?: string
   }): string {
     const barcodeDataURL = this.generateDataURL(data.barcode, {
       width: 250,
@@ -286,6 +287,10 @@ export class BarcodeGenerator {
                 <span class="info-label">Tedarikçi:</span>
                 <span>${data.supplier}</span>
               </div>
+              ${data.customer ? `<div class="info-row">
+                <span class="info-label">Müşteri:</span>
+                <span style="font-weight: bold; color: #007bff;">${data.customer}</span>
+              </div>` : ''}
               <div class="info-row">
                 <span class="info-label">Tarih:</span>
                 <span>${data.date}</span>
@@ -314,6 +319,7 @@ export class BarcodeGenerator {
     coilCount: number
     supplier: string
     date: string
+    customer?: string
   }): string {
     const weightPerCoil = Math.round((data.totalWeight / data.coilCount) * 100) / 100
     let labelsHTML = `
@@ -448,6 +454,10 @@ export class BarcodeGenerator {
               <span class="info-label">Tedarikçi:</span>
               <span>${data.supplier}</span>
             </div>
+            ${data.customer ? `<div class="info-row">
+              <span class="info-label">Müşteri:</span>
+              <span style="font-weight: bold; color: #007bff;">${data.customer}</span>
+            </div>` : ''}
             <div class="info-row">
               <span class="info-label">Tarih:</span>
               <span>${data.date}</span>
@@ -460,6 +470,218 @@ export class BarcodeGenerator {
         </div>
       `
     }
+
+    labelsHTML += `
+        </body>
+      </html>
+    `
+
+    return labelsHTML
+  }
+
+  static generateReturnLabels(data: {
+    parentBarcode: string
+    title: string
+    specifications: string
+    supplier: string
+    customer?: string
+    returnBarcodes: Array<{
+      barcode: string
+      weight: number
+      date: string
+      condition: string
+      operator: string
+      notes: string
+    }>
+  }): string {
+    let labelsHTML = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Dönüş Barkod Etiketleri - ${data.parentBarcode}</title>
+          <style>
+            @media print {
+              body { margin: 0; }
+              .no-print { display: none; }
+            }
+            body {
+              font-family: Arial, sans-serif;
+              margin: 20px;
+              background: white;
+            }
+            .label {
+              width: 300px;
+              border: 2px solid #ff8c00;
+              padding: 15px;
+              margin: 10px auto;
+              background: white;
+              page-break-after: always;
+            }
+            .header {
+              text-align: center;
+              font-weight: bold;
+              font-size: 16px;
+              margin-bottom: 10px;
+              border-bottom: 1px solid #ff8c00;
+              padding-bottom: 5px;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              gap: 10px;
+              color: #ff8c00;
+            }
+            .company-logo {
+              height: 20px;
+              width: auto;
+              max-width: 60px;
+            }
+            .barcode {
+              text-align: center;
+              margin: 15px 0;
+            }
+            .barcode img {
+              max-width: 100%;
+              height: auto;
+            }
+            .info {
+              font-size: 12px;
+              line-height: 1.4;
+            }
+            .info-row {
+              display: flex;
+              justify-content: space-between;
+              margin-bottom: 5px;
+            }
+            .info-label {
+              font-weight: bold;
+              color: #666;
+            }
+            .specs {
+              font-size: 14px;
+              font-weight: bold;
+              text-align: center;
+              margin: 10px 0;
+              padding: 5px;
+              background: #fff3e0;
+              border-radius: 4px;
+              border: 1px solid #ff8c00;
+            }
+            .return-badge {
+              background: #ff8c00;
+              color: white;
+              padding: 5px 10px;
+              border-radius: 4px;
+              font-weight: bold;
+              text-align: center;
+              margin-bottom: 10px;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              gap: 5px;
+            }
+            .condition {
+              font-size: 11px;
+              padding: 2px 6px;
+              border-radius: 3px;
+              font-weight: bold;
+            }
+            .condition-kullanilabilir {
+              background: #d4edda;
+              color: #155724;
+            }
+            .condition-hasarli {
+              background: #f8d7da;
+              color: #721c24;
+            }
+            .condition-kontrol {
+              background: #fff3cd;
+              color: #856404;
+            }
+            .print-button {
+              background: #ff8c00;
+              color: white;
+              border: none;
+              padding: 10px 20px;
+              border-radius: 4px;
+              cursor: pointer;
+              font-size: 14px;
+              margin: 20px auto;
+              display: block;
+            }
+            .print-button:hover {
+              background: #e67e00;
+            }
+          </style>
+        </head>
+        <body>
+          <button class="print-button no-print" onclick="window.print()">🖨️ Tüm Dönüş Etiketlerini Yazdır</button>
+    `
+
+    // Generate a label for each return barcode
+    data.returnBarcodes.forEach((returnItem, index) => {
+      const barcodeDataURL = this.generateDataURL(returnItem.barcode, {
+        width: 250,
+        height: 80,
+        fontSize: 10,
+        showText: true,
+      })
+
+      let conditionClass = "condition-kullanilabilir"
+      if (returnItem.condition.includes("Hasarlı")) {
+        conditionClass = "condition-hasarli"
+      } else if (returnItem.condition.includes("Kontrol")) {
+        conditionClass = "condition-kontrol"
+      }
+
+      labelsHTML += `
+        <div class="label">
+          <div class="header">
+            <img src="${window.location.origin}/images/company-logo.png" alt="DEKA" class="company-logo" onerror="console.log('Logo yüklenemedi:', this.src); this.style.display='none'">
+            🔄 DÖNÜŞ ETİKETİ
+          </div>
+          <div class="return-badge">
+            DÖNÜŞ ${index + 1} / ${data.returnBarcodes.length}
+            <span class="condition ${conditionClass}">${returnItem.condition}</span>
+          </div>
+          
+          <div class="barcode">
+            <img src="${barcodeDataURL}" alt="Barkod: ${returnItem.barcode}">
+          </div>
+          
+          <div class="specs">${data.specifications}</div>
+          
+          <div class="info">
+            <div class="info-row">
+              <span class="info-label">Dönüş Ağırlığı:</span>
+              <span>${returnItem.weight.toFixed(1)} kg</span>
+            </div>
+            <div class="info-row">
+              <span class="info-label">Tedarikçi:</span>
+              <span>${data.supplier}</span>
+            </div>
+            ${data.customer ? `<div class="info-row">
+              <span class="info-label">Müşteri:</span>
+              <span style="font-weight: bold; color: #007bff;">${data.customer}</span>
+            </div>` : ''}
+            <div class="info-row">
+              <span class="info-label">Dönüş Tarihi:</span>
+              <span>${returnItem.date}</span>
+            </div>
+            ${returnItem.operator ? `<div class="info-row">
+              <span class="info-label">Operatör:</span>
+              <span>${returnItem.operator}</span>
+            </div>` : ''}
+            <div class="info-row">
+              <span class="info-label">Barkod:</span>
+              <span style="font-family: monospace;">${returnItem.barcode}</span>
+            </div>
+            ${returnItem.notes ? `<div style="margin-top: 8px; padding: 5px; background: #f8f9fa; border-radius: 3px; font-size: 10px;">
+              <strong>Not:</strong> ${returnItem.notes.replace('Ürün dönüş - Depo - ', '').split(' - ')[0]}
+            </div>` : ''}
+          </div>
+        </div>
+      `
+    })
 
     labelsHTML += `
         </body>

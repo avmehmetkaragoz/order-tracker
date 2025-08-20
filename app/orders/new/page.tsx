@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback, useMemo } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -14,8 +14,11 @@ import { ArrowLeft, Save, X, Calculator, ExternalLink } from "lucide-react"
 import { ordersRepo } from "@/lib/orders-repo"
 import { settingsRepo } from "@/lib/settings-repo"
 import { pricingRepo } from "@/lib/pricing-repo"
+import { warehouseRepo } from "@/lib/warehouse-repo"
 import { useToast } from "@/hooks/use-toast"
+import { StockAlertCard } from "@/components/stock-alert-card"
 import type { OrderStatus } from "@/types/order"
+import type { WarehouseItem } from "@/types/warehouse"
 
 export default function NewOrderPage() {
   const router = useRouter()
@@ -29,6 +32,13 @@ export default function NewOrderPage() {
   const [totalPrice, setTotalPrice] = useState("")
   const [currency, setCurrency] = useState("EUR")
   const [isAddingPrice, setIsAddingPrice] = useState(false)
+  
+  // Stock control states
+  const [availableStock, setAvailableStock] = useState<WarehouseItem[]>([])
+  const [isCheckingStock, setIsCheckingStock] = useState(false)
+  const [showStockAlert, setShowStockAlert] = useState(false)
+  const [originalQuantity, setOriginalQuantity] = useState<number | null>(null)
+  const [isOptimized, setIsOptimized] = useState(false)
 
   console.log("[v0] NewOrderPage component rendering")
 
@@ -244,8 +254,128 @@ export default function NewOrderPage() {
     }
   }
 
+  // Debounced stock checking function
+  const debouncedStockCheck = useCallback(
+    useMemo(() => {
+      let timeoutId: NodeJS.Timeout
+      return (material: string, cm: string, mikron: string, quantity: string) => {
+        clearTimeout(timeoutId)
+        timeoutId = setTimeout(async () => {
+          if (material && cm && mikron && quantity) {
+            setIsCheckingStock(true)
+            try {
+              const stockItems = await warehouseRepo.getAvailableStockBySpecs(
+                parseInt(cm),
+                parseInt(mikron),
+                material
+              )
+              
+              setAvailableStock(stockItems)
+              
+              // Calculate total available stock
+              const totalAvailable = stockItems.reduce((sum, item) => sum + item.currentWeight, 0)
+              const requiredQuantity = parseFloat(quantity)
+              
+              // Check if this is an optimized quantity
+              const isCurrentlyOptimized = isOptimized && originalQuantity !== null
+              
+              // Show alert logic:
+              // 1. We have stock available
+              // 2. Stock is less than required quantity
+              // 3. Not optimized yet (if already optimized, don't show alert)
+              let shouldShowAlert = false
+              
+              if (totalAvailable > 0 && !isCurrentlyOptimized) {
+                // Only show alert if not optimized yet and stock < required
+                shouldShowAlert = totalAvailable < requiredQuantity
+              }
+              
+              setShowStockAlert(shouldShowAlert)
+            } catch (error) {
+              console.error("Error checking stock:", error)
+              setAvailableStock([])
+              setShowStockAlert(false)
+            } finally {
+              setIsCheckingStock(false)
+            }
+          } else {
+            setAvailableStock([])
+            setShowStockAlert(false)
+          }
+        }, 500)
+      }
+    }, [isOptimized, originalQuantity]),
+    [isOptimized, originalQuantity]
+  )
+
+  // Stock calculations
+  const stockCalculations = useMemo(() => {
+    if (!availableStock.length || !form.quantity) {
+      return null
+    }
+
+    const requiredQuantity = parseFloat(form.quantity)
+    const totalAvailable = availableStock.reduce((sum, item) => sum + item.currentWeight, 0)
+    
+    // If we're in optimized state, calculate based on original quantity
+    const baseQuantity = isOptimized && originalQuantity ? originalQuantity : requiredQuantity
+    const optimizedQuantity = Math.max(0, baseQuantity - totalAvailable)
+    const savingsPercentage = totalAvailable > 0 ? Math.round((totalAvailable / baseQuantity) * 100) : 0
+
+    return {
+      requiredQuantity,
+      totalAvailable,
+      optimizedQuantity,
+      savingsPercentage: Math.min(savingsPercentage, 100)
+    }
+  }, [availableStock, form.quantity, isOptimized, originalQuantity])
+
+  // Handle stock optimization
+  const handleOptimizeOrder = useCallback(() => {
+    if (stockCalculations) {
+      // Save original quantity if not already saved
+      if (originalQuantity === null) {
+        setOriginalQuantity(stockCalculations.requiredQuantity)
+      }
+      
+      // Update form directly without triggering updateField to avoid resetting optimization state
+      setForm((prev) => ({ ...prev, quantity: stockCalculations.optimizedQuantity.toString() }))
+      setIsOptimized(true)
+      setShowStockAlert(false)
+      
+      toast({
+        title: "Sipariş Optimize Edildi",
+        description: `Miktar ${stockCalculations.optimizedQuantity} kg olarak güncellendi.`,
+      })
+    }
+  }, [stockCalculations, originalQuantity, toast])
+
   const updateField = (field: string, value: string) => {
     setForm((prev) => ({ ...prev, [field]: value }))
+    
+    // Reset optimization state if user manually changes quantity
+    if (field === "quantity" && isOptimized) {
+      const newQuantity = parseFloat(value)
+      const currentOptimizedQuantity = stockCalculations?.optimizedQuantity || 0
+      
+      // If user changes quantity to something different than optimized quantity, reset optimization
+      if (newQuantity !== currentOptimizedQuantity) {
+        setIsOptimized(false)
+        setOriginalQuantity(null)
+      }
+    }
+    
+    // Reset optimization state if specifications change
+    if (field === "material" || field === "cm" || field === "mikron") {
+      setIsOptimized(false)
+      setOriginalQuantity(null)
+    }
+    
+    // Trigger stock check when relevant fields change
+    if (field === "material" || field === "cm" || field === "mikron" || field === "quantity") {
+      const newForm = { ...form, [field]: value }
+      debouncedStockCheck(newForm.material, newForm.cm, newForm.mikron, newForm.quantity)
+    }
   }
 
   const clearDate = (field: string) => {
@@ -404,7 +534,12 @@ export default function NewOrderPage() {
 
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <Label htmlFor="quantity">Miktar</Label>
+                <Label htmlFor="quantity" className="flex items-center gap-2 h-5">
+                  Miktar
+                  {isCheckingStock && (
+                    <div className="h-3 w-3 animate-spin rounded-full border-2 border-blue-600 border-t-transparent"></div>
+                  )}
+                </Label>
                 <Input
                   id="quantity"
                   type="number"
@@ -415,7 +550,7 @@ export default function NewOrderPage() {
                 />
               </div>
               <div>
-                <Label htmlFor="unit">Birim</Label>
+                <Label htmlFor="unit" className="h-5 flex items-center">Birim</Label>
                 <Select value={form.unit} onValueChange={(value) => updateField("unit", value)}>
                   <SelectTrigger>
                     <SelectValue />
@@ -431,6 +566,86 @@ export default function NewOrderPage() {
             </div>
           </CardContent>
         </Card>
+
+        {/* Stok Uyarısı */}
+        {showStockAlert && stockCalculations && (
+          <StockAlertCard
+            requiredAmount={isOptimized && originalQuantity ? originalQuantity : stockCalculations.requiredQuantity}
+            availableStock={stockCalculations.totalAvailable}
+            specifications={`${form.cm}cm • ${form.mikron}μ • ${form.material}`}
+            onOptimize={handleOptimizeOrder}
+            stockItems={availableStock.map(item => ({
+              id: item.id,
+              weight: item.currentWeight,
+              barcode: item.barcode,
+              supplier: item.supplier
+            }))}
+          />
+        )}
+
+        {/* Optimizasyon Bilgi Kartı */}
+        {isOptimized && originalQuantity && stockCalculations && (
+          <Card className="border-green-200 bg-green-50 dark:bg-green-950/20 dark:border-green-800">
+            <CardContent className="p-4">
+              <div className="flex items-start gap-3">
+                <div className="h-5 w-5 text-green-600 dark:text-green-400 mt-0.5 flex-shrink-0">
+                  ✅
+                </div>
+                <div className="flex-1">
+                  <h4 className="font-medium text-green-900 dark:text-green-100 mb-2">
+                    Sipariş Optimize Edildi!
+                  </h4>
+                  
+                  <div className="text-sm text-green-700 dark:text-green-300 space-y-2">
+                    <div className="bg-white dark:bg-green-900/30 p-3 rounded border border-green-200 dark:border-green-700">
+                      <div className="space-y-1">
+                        <div className="flex justify-between">
+                          <span>🎯 Asıl ihtiyaç:</span>
+                          <span className="font-medium">{originalQuantity}kg</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span>📦 Mevcut stok:</span>
+                          <span className="font-medium">{stockCalculations.totalAvailable}kg</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span>🛒 Yeni sipariş:</span>
+                          <span className="font-medium">{stockCalculations.optimizedQuantity}kg</span>
+                        </div>
+                        <div className="flex justify-between border-t pt-1 mt-1 font-semibold">
+                          <span>= Toplam tedarik:</span>
+                          <span>{stockCalculations.totalAvailable + stockCalculations.optimizedQuantity}kg</span>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <div className="flex gap-2 mt-3">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="flex-1 text-xs h-8"
+                        onClick={() => {
+                          setForm((prev) => ({ ...prev, quantity: originalQuantity?.toString() || "" }))
+                          setIsOptimized(false)
+                          setOriginalQuantity(null)
+                          toast({
+                            title: "Asıl Miktara Dönüldü",
+                            description: `Miktar ${originalQuantity}kg olarak geri yüklendi.`,
+                          })
+                        }}
+                      >
+                        🔄 Asıl Miktara Dön ({originalQuantity}kg)
+                      </Button>
+                    </div>
+                    
+                    <p className="text-xs text-center">
+                      💡 Mevcut stok kullanılarak sipariş miktarı optimize edildi
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Fiyat Bilgileri */}
         <Card>

@@ -46,6 +46,10 @@ export class OrderWarehouseIntegration {
         is_in_warehouse: true,
       })
 
+      // Determine stock type and customer info based on order
+      const stockType = order.customer ? 'customer' : 'general'
+      const customerName = order.customer || undefined
+
       // Create warehouse item from order
       const warehouseItem = await warehouseRepo.addItem({
         orderId: order.id,
@@ -56,11 +60,13 @@ export class OrderWarehouseIntegration {
         originalWeight: warehouseData.actualWeight,
         bobinCount: warehouseData.actualBobinCount,
         status: "Stokta",
+        stockType: stockType,
+        customerName: customerName,
         location: warehouseData.location,
         receivedDate: new Date().toISOString(),
         lastMovementDate: new Date().toISOString(),
         supplier: order.supplier,
-        notes: warehouseData.notes || `Depoya alındı - Sipariş ${order.id.slice(0, 8)}...`,
+        notes: warehouseData.notes || `Depoya alındı - Sipariş ${order.id.slice(0, 8)}... ${stockType === 'customer' ? `(${customerName})` : '(Genel Stok)'}`,
       })
 
       return { success: true, warehouseItem }

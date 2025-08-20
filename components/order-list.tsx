@@ -95,12 +95,27 @@ export function OrderList({
     }
   })
 
+  // Check if we should show delivered or undelivered based on orders filtering
+  const hasDeliveredOrders = orders.some(o => o.status === "Delivered" || o.status === "Cancelled")
+  const hasUndeliveredOrders = orders.some(o => o.status !== "Delivered" && o.status !== "Cancelled")
+  
+  // If we only have delivered orders, we're in "delivered" mode
+  // If we only have undelivered orders, we're in "undelivered" mode
+  const showingDeliveredOnly = hasDeliveredOrders && !hasUndeliveredOrders
+  const showingUndeliveredOnly = hasUndeliveredOrders && !hasDeliveredOrders
+
   return (
     <div className="py-4 space-y-6">
       {/* Undelivered Orders */}
-      {Object.keys(undeliveredGroups).length > 0 && (
+      {Object.keys(undeliveredGroups).length > 0 && !showingDeliveredOnly && (
         <div>
-          <h2 className="text-lg font-semibold mb-4 text-orange-500">HENÜZ TESLİM EDİLMEMİŞLER</h2>
+          <div className="flex items-center gap-3 mb-4">
+            <div className="h-px bg-orange-200 flex-1" />
+            <span className="text-xs font-medium text-orange-600 bg-orange-50 px-3 py-1 rounded-full border border-orange-200">
+              Teslim Edilmeyenler
+            </span>
+            <div className="h-px bg-orange-200 flex-1" />
+          </div>
           <div className="space-y-3">
             {Object.entries(undeliveredGroups).map(([groupKey, groupOrders]) => {
               const sectionKey = `undelivered-${groupKey}`
@@ -147,9 +162,15 @@ export function OrderList({
       )}
 
       {/* Delivered Orders */}
-      {Object.keys(deliveredGroups).length > 0 && (
+      {Object.keys(deliveredGroups).length > 0 && !showingUndeliveredOnly && (
         <div>
-          <h2 className="text-lg font-semibold mb-4 text-green-500">TESLİM EDİLENLER</h2>
+          <div className="flex items-center gap-3 mb-4">
+            <div className="h-px bg-green-200 flex-1" />
+            <span className="text-xs font-medium text-green-600 bg-green-50 px-3 py-1 rounded-full border border-green-200">
+              Teslim Edilenler
+            </span>
+            <div className="h-px bg-green-200 flex-1" />
+          </div>
           <div className="space-y-3">
             {Object.entries(deliveredGroups).map(([groupKey, groupOrders]) => {
               const sectionKey = `delivered-${groupKey}`

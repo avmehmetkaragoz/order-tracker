@@ -383,6 +383,45 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
           </Card>
         )}
 
+        {/* Status Update Card */}
+        <Card className="border-amber-200 dark:border-amber-800">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base flex items-center gap-2 text-amber-700 dark:text-amber-300">
+              <div className="h-4 w-4 rounded bg-gradient-to-br from-amber-500 to-orange-500"></div>
+              Durum Güncelleme
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex items-center justify-between">
+              <Label className="text-sm text-muted-foreground">Mevcut Durum</Label>
+              <Badge className={statusColors[order.status]}>
+                {statusLabels[order.status]}
+              </Badge>
+            </div>
+
+            {isEditing ? (
+              <div className="space-y-3">
+                <Select value={editedOrder.status} onValueChange={handleStatusChange}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Requested">Talep Edildi</SelectItem>
+                    <SelectItem value="Ordered">Sipariş Verildi</SelectItem>
+                    <SelectItem value="Delivered">Teslim Edildi</SelectItem>
+                    <SelectItem value="Return">İade</SelectItem>
+                    <SelectItem value="Cancelled">İptal Edildi</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            ) : (
+              <div className="text-sm text-muted-foreground">
+                Durumu güncellemek için düzenleme moduna geçin
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="text-base flex items-center gap-2">

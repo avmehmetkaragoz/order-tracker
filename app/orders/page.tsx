@@ -29,7 +29,7 @@ export default function OrdersPage() {
   const router = useRouter()
   const [orders, setOrders] = useState<Order[]>([])
   const [filteredOrders, setFilteredOrders] = useState<Order[]>([])
-  const [filters, setFilters] = useState<OrderFilters>({ hideDelivered: false, searchField: "all" })
+  const [filters, setFilters] = useState<OrderFilters>({ hideDelivered: true, searchField: "all" })
   const [groupBy, setGroupBy] = useState<GroupBy>("supplier")
   const [sortBy, setSortBy] = useState<SortBy>("newest")
   const [isLoading, setIsLoading] = useState(true)
@@ -106,7 +106,9 @@ export default function OrdersPage() {
       filtered.sort((a, b) => {
         switch (sortBy) {
           case "newest":
-            return new Date(b.createdDate).getTime() - new Date(a.createdDate).getTime()
+            return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+          case "oldest":
+            return new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
           case "eta":
             if (!a.eta_date && !b.eta_date) return 0
             if (!a.eta_date) return 1

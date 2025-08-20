@@ -46,7 +46,7 @@ export type OrderFilters = {
 }
 
 export type GroupBy = "supplier" | "requester" | "none"
-export type SortBy = "newest" | "eta" | "supplier" | "requester"
+export type SortBy = "newest" | "oldest" | "eta" | "supplier" | "requester"
 
 export type SupplierPrice = {
   id: string

@@ -2,21 +2,29 @@
 
 import { use, useEffect, useState } from "react"
 import { warehouseRepo } from "@/lib/warehouse-repo"
+import { ordersRepo } from "@/lib/orders-repo"
 import type { WarehouseItem, StockMovement } from "@/types/warehouse"
+import type { Order } from "@/types/order"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { LoadingSpinner } from "@/components/loading-spinner"
 import { BarcodePrinter } from "@/components/barcode-printer"
-import { ArrowLeft, Package, History, Edit, TrendingDown, TrendingUp, RotateCcw, LogOut, Undo2 } from "lucide-react"
+import { ReturnBarcodePrinter } from "@/components/return-barcode-printer"
+import { ArrowLeft, Package, History, Edit, TrendingDown, TrendingUp, RotateCcw, LogOut, Undo2, ExternalLink } from "lucide-react"
 import { ProductExitDialog, type ProductExitData } from "@/components/product-exit-dialog"
+import { ProductEditDialog, type ProductEditData } from "@/components/product-edit-dialog"
+import { ProductReturnDialog, type ProductReturnData } from "@/components/product-return-dialog"
 
 export default function WarehouseItemDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id: itemId } = use(params)
   const [item, setItem] = useState<WarehouseItem | null>(null)
   const [movements, setMovements] = useState<StockMovement[]>([])
+  const [orderDetails, setOrderDetails] = useState<Order | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [isExitDialogOpen, setIsExitDialogOpen] = useState(false)
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
+  const [isReturnDialogOpen, setIsReturnDialogOpen] = useState(false)
   const [isProcessing, setIsProcessing] = useState(false)
 
   useEffect(() => {
@@ -38,6 +46,19 @@ export default function WarehouseItemDetailPage({ params }: { params: Promise<{ 
       ])
       setItem(warehouseItem)
       setMovements(stockMovements)
+
+      // Load order details if item has orderId
+      if (warehouseItem?.orderId) {
+        try {
+          const order = await ordersRepo.get(warehouseItem.orderId)
+          setOrderDetails(order)
+        } catch (error) {
+          console.error("Error loading order details:", error)
+          setOrderDetails(null)
+        }
+      } else {
+        setOrderDetails(null)
+      }
     } catch (error) {
       console.error("Error loading item data:", error)
     } finally {
@@ -136,6 +157,70 @@ export default function WarehouseItemDetailPage({ params }: { params: Promise<{ 
     }
   }
 
+  const handleProductEdit = async (editData: ProductEditData) => {
+    if (!item) return
+
+    setIsProcessing(true)
+    try {
+      console.log("[v1] Processing product edit:", editData)
+      
+      const updatedItem = await warehouseRepo.updateItemDetails(item.id, editData)
+      
+      if (updatedItem) {
+        setItem(updatedItem)
+        // Reload movements to show the new edit record
+        const updatedMovements = await warehouseRepo.getStockMovements(item.id)
+        setMovements(updatedMovements)
+        
+        setIsEditDialogOpen(false)
+        console.log("[v1] Product edit processed successfully")
+      } else {
+        console.error("[v1] Failed to process product edit")
+        // TODO: Show error toast
+      }
+    } catch (error) {
+      console.error("[v1] Error processing product edit:", error)
+      // TODO: Show error toast
+    } finally {
+      setIsProcessing(false)
+    }
+  }
+
+  const handleProductReturn = async (returnData: ProductReturnData) => {
+    if (!item) return
+
+    setIsProcessing(true)
+    try {
+      console.log("[v1] Processing product return:", returnData)
+      
+      const updatedItem = await warehouseRepo.processProductReturn(item.id, returnData)
+      
+      if (updatedItem) {
+        setItem(updatedItem)
+        // Reload movements to show the new return record
+        const updatedMovements = await warehouseRepo.getStockMovements(item.id)
+        setMovements(updatedMovements)
+        
+        setIsReturnDialogOpen(false)
+        console.log("[v1] Product return processed successfully")
+        
+        // TODO: Generate and print return barcode if requested
+        if (returnData.generateReturnBarcode) {
+          console.log("[v1] Generating return barcode...")
+          // This will be implemented when we add barcode generation
+        }
+      } else {
+        console.error("[v1] Failed to process product return")
+        // TODO: Show error toast
+      }
+    } catch (error) {
+      console.error("[v1] Error processing product return:", error)
+      // TODO: Show error toast
+    } finally {
+      setIsProcessing(false)
+    }
+  }
+
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -159,6 +244,13 @@ export default function WarehouseItemDetailPage({ params }: { params: Promise<{ 
       </div>
     )
   }
+
+  // Check if there are return movements to determine barcode display logic
+  const hasReturnMovements = movements.some(
+    movement => movement.type === "Gelen" && 
+    movement.notes && 
+    movement.notes.includes("Ürün dönüş")
+  )
 
   return (
     <div className="min-h-screen bg-background">
@@ -189,13 +281,11 @@ export default function WarehouseItemDetailPage({ params }: { params: Promise<{ 
           <Button 
             variant="outline" 
             className="w-full bg-transparent"
-            onClick={() => {
-              // TODO: Implement product return functionality
-              console.log("Ürün İade clicked")
-            }}
+            onClick={() => setIsReturnDialogOpen(true)}
+            disabled={isProcessing}
           >
-            <Undo2 className="h-4 w-4 mr-2" />
-            Ürün İade
+            <RotateCcw className="h-4 w-4 mr-2" />
+            Ürün Dönüş
           </Button>
         </div>
 
@@ -235,7 +325,7 @@ export default function WarehouseItemDetailPage({ params }: { params: Promise<{ 
               </div>
               <div>
                 <div className="text-muted-foreground">Konum</div>
-                <div className="font-medium">{item.location || "Genel Depo"}</div>
+                <div className="font-medium">{item.location === "Genel Depo" ? "Depo" : (item.location || "Depo")}</div>
               </div>
               <div>
                 <div className="text-muted-foreground">Alış Tarihi</div>
@@ -243,6 +333,13 @@ export default function WarehouseItemDetailPage({ params }: { params: Promise<{ 
                   {item.receivedDate ? formatDate(item.receivedDate) : "Belirtilmemiş"}
                 </div>
               </div>
+              {/* Customer info if available */}
+              {orderDetails?.customer && (
+                <div>
+                  <div className="text-muted-foreground">Müşteri</div>
+                  <div className="font-medium text-blue-600 dark:text-blue-400">{orderDetails.customer}</div>
+                </div>
+              )}
             </div>
 
             {item.notes && (
@@ -251,6 +348,31 @@ export default function WarehouseItemDetailPage({ params }: { params: Promise<{ 
                 <div className="text-sm bg-muted/50 p-3 rounded-md">{translateNotes(item.notes)}</div>
               </div>
             )}
+
+            {/* Actions inside card */}
+            <div className="grid grid-cols-1 gap-3 pt-2">
+              <Button 
+                variant="outline" 
+                className="w-full bg-transparent"
+                onClick={() => setIsEditDialogOpen(true)}
+                disabled={isProcessing}
+              >
+                <Edit className="h-4 w-4 mr-2" />
+                Ürün Bilgilerini Düzenle
+              </Button>
+              
+              {/* Order redirect button - only show if item came from an order */}
+              {item.orderId && (
+                <Button 
+                  variant="outline" 
+                  className="w-full bg-transparent border-blue-200 text-blue-600 hover:bg-blue-50 dark:border-blue-800 dark:text-blue-400 dark:hover:bg-blue-950"
+                  onClick={() => window.location.href = `/orders/${item.orderId}`}
+                >
+                  <ExternalLink className="h-4 w-4 mr-2" />
+                  Sipariş Detayına Git
+                </Button>
+              )}
+            </div>
           </CardContent>
         </Card>
 
@@ -264,17 +386,23 @@ export default function WarehouseItemDetailPage({ params }: { params: Promise<{ 
             supplier={item.supplier}
             date={item.receivedDate ? formatDate(item.receivedDate) : "Belirtilmemiş"}
             coilCount={item.bobinCount || 0}
-            showCoilBarcodes={true}
+            showCoilBarcodes={!hasReturnMovements}
+            customer={orderDetails?.customer}
           />
         </div>
 
-        {/* Actions */}
-        <div className="grid grid-cols-1 gap-3 mb-6">
-          <Button variant="outline" className="w-full bg-transparent">
-            <Edit className="h-4 w-4 mr-2" />
-            Ürün Bilgilerini Düzenle
-          </Button>
+        {/* Return Barcode Printer - Only show if there are return movements */}
+        <div className="mb-6">
+          <ReturnBarcodePrinter
+            parentBarcode={item.barcode}
+            title={`${item.cm}cm • ${item.mikron}μ • ${item.material}`}
+            specifications={`${item.cm}cm • ${item.mikron}μ • ${item.material}`}
+            supplier={item.supplier}
+            returnMovements={movements}
+            customer={orderDetails?.customer}
+          />
         </div>
+
 
         {/* Stock Movements */}
         <Card>
@@ -325,6 +453,26 @@ export default function WarehouseItemDetailPage({ params }: { params: Promise<{ 
             onOpenChange={setIsExitDialogOpen}
             item={item}
             onConfirm={handleProductExit}
+          />
+        )}
+
+        {/* Product Edit Dialog */}
+        {item && (
+          <ProductEditDialog
+            open={isEditDialogOpen}
+            onOpenChange={setIsEditDialogOpen}
+            item={item}
+            onConfirm={handleProductEdit}
+          />
+        )}
+
+        {/* Product Return Dialog */}
+        {item && (
+          <ProductReturnDialog
+            open={isReturnDialogOpen}
+            onOpenChange={setIsReturnDialogOpen}
+            item={item}
+            onConfirm={handleProductReturn}
           />
         )}
       </div>

@@ -45,11 +45,6 @@ const statusColors = {
   Return: "bg-purple-500/10 text-purple-500 border-purple-500/20",
   Delivered: "bg-green-500/10 text-green-500 border-green-500/20",
   Cancelled: "bg-red-500/10 text-red-500 border-red-500/20",
-  "Talep Edildi": "bg-blue-500/10 text-blue-500 border-blue-500/20",
-  "Sipariş Verildi": "bg-yellow-500/10 text-yellow-500 border-yellow-500/20",
-  İade: "bg-purple-500/10 text-purple-500 border-purple-500/20",
-  "Teslim Edildi": "bg-green-500/10 text-green-500 border-green-500/20",
-  "İptal Edildi": "bg-red-500/10 text-red-500 border-red-500/20",
 }
 
 const statusLabels = {
@@ -58,11 +53,6 @@ const statusLabels = {
   Return: "İade",
   Delivered: "Teslim Edildi",
   Cancelled: "İptal Edildi",
-  "Talep Edildi": "Talep Edildi",
-  "Sipariş Verildi": "Sipariş Verildi",
-  İade: "İade",
-  "Teslim Edildi": "Teslim Edildi",
-  "İptal Edildi": "İptal Edildi",
 }
 
 export function OrderItem({
@@ -107,7 +97,7 @@ export function OrderItem({
   }
 
   const canMarkDelivered =
-    order.status !== "Delivered" && order.status !== "Cancelled" && order.status !== "Teslim Edildi"
+    order.status !== "Delivered" && order.status !== "Cancelled"
   const overdue = isOverdue(order)
 
   const handleMarkDelivered = (e: React.MouseEvent) => {
@@ -273,9 +263,18 @@ export function OrderItem({
 
           <div className="flex-1 min-w-0 space-y-3">
             <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Calendar className="h-3 w-3 text-muted-foreground" />
-                <span className="text-xs text-muted-foreground font-medium">{formatDate(order.created_at)}</span>
+              <div className="flex items-center gap-4">
+                <div className="flex items-center gap-2">
+                  <Calendar className="h-3 w-3 text-muted-foreground" />
+                  <span className="text-xs text-muted-foreground font-medium">{formatDate(order.created_at)}</span>
+                </div>
+                {order.delivered_date && (
+                  <div className="flex items-center gap-1">
+                    <Check className="h-3 w-3 text-green-600" />
+                    <span className="text-xs text-muted-foreground">Teslim:</span>
+                    <span className="text-xs font-medium text-green-600">{formatDate(order.delivered_date)}</span>
+                  </div>
+                )}
               </div>
               <div className="flex items-center gap-1">
                 {onDelete && (
@@ -383,34 +382,6 @@ export function OrderItem({
               </div>
             )}
 
-            {getPricingDisplay() && (
-              <>
-                <Separator />
-                <div className="flex items-center gap-2">{getPricingDisplay()}</div>
-              </>
-            )}
-
-            {(order.eta_date || order.delivered_date) && (
-              <>
-                <Separator />
-                <div className="flex items-center gap-4 text-xs">
-                  {order.eta_date && (
-                    <div className="flex items-center gap-1">
-                      <Truck className="h-3 w-3 text-muted-foreground" />
-                      <span className="text-muted-foreground">ETA:</span>
-                      <span className="font-medium text-foreground">{formatDate(order.eta_date)}</span>
-                    </div>
-                  )}
-                  {order.delivered_date && (
-                    <div className="flex items-center gap-1">
-                      <Check className="h-3 w-3 text-green-600" />
-                      <span className="text-muted-foreground">Teslim:</span>
-                      <span className="font-medium text-green-600">{formatDate(order.delivered_date)}</span>
-                    </div>
-                  )}
-                </div>
-              </>
-            )}
 
             <Separator />
 
@@ -470,19 +441,14 @@ const getStatusBorderColor = (order: Order | null) => {
 
   switch (order.status) {
     case "Requested":
-    case "Talep Edildi":
       return "border-l-blue-500"
     case "Ordered":
-    case "Sipariş Verildi":
       return "border-l-yellow-500"
     case "Return":
-    case "İade":
       return "border-l-purple-500"
     case "Delivered":
-    case "Teslim Edildi":
       return "border-l-green-500"
     case "Cancelled":
-    case "İptal Edildi":
       return "border-l-red-500"
     default:
       return "border-l-gray-500"
@@ -492,19 +458,14 @@ const getStatusBorderColor = (order: Order | null) => {
 const getStatusDotColor = (status: Order["status"]) => {
   switch (status) {
     case "Requested":
-    case "Talep Edildi":
       return "bg-blue-500"
     case "Ordered":
-    case "Sipariş Verildi":
       return "bg-yellow-500"
     case "Return":
-    case "İade":
       return "bg-purple-500"
     case "Delivered":
-    case "Teslim Edildi":
       return "bg-green-500"
     case "Cancelled":
-    case "İptal Edildi":
       return "bg-red-500"
     default:
       return "bg-gray-500"

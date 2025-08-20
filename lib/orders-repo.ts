@@ -34,14 +34,62 @@ class OrdersRepository {
               case "notes":
                 query = query.ilike("notes", `%${searchLower}%`)
                 break
+              case "mikron":
+                // Numeric search for mikron field
+                const mikronValue = parseFloat(filters.search)
+                if (!isNaN(mikronValue)) {
+                  query = query.eq("mikron", mikronValue)
+                }
+                break
+              case "cm":
+                // Numeric search for cm field
+                const cmValue = parseFloat(filters.search)
+                if (!isNaN(cmValue)) {
+                  query = query.eq("cm", cmValue)
+                }
+                break
+              case "bobinSayisi":
+                // Numeric search for bobin_sayisi field
+                const bobinValue = parseInt(filters.search)
+                if (!isNaN(bobinValue)) {
+                  query = query.eq("bobin_sayisi", bobinValue)
+                }
+                break
+              case "quantity":
+                // Numeric search for quantity field
+                const quantityValue = parseFloat(filters.search)
+                if (!isNaN(quantityValue)) {
+                  query = query.eq("quantity", quantityValue)
+                }
+                break
               default:
                 break
             }
           } else {
             // Search across multiple fields
-            query = query.or(
-              `requester.ilike.%${searchLower}%,supplier.ilike.%${searchLower}%,customer.ilike.%${searchLower}%,material.ilike.%${searchLower}%,notes.ilike.%${searchLower}%`,
-            )
+            const numericValue = parseFloat(filters.search)
+            const intValue = parseInt(filters.search)
+            
+            let orConditions = [
+              `requester.ilike.%${searchLower}%`,
+              `supplier.ilike.%${searchLower}%`,
+              `customer.ilike.%${searchLower}%`,
+              `material.ilike.%${searchLower}%`,
+              `notes.ilike.%${searchLower}%`
+            ]
+            
+            // Add numeric field searches if the search term is a valid number
+            if (!isNaN(numericValue)) {
+              orConditions.push(`mikron.eq.${numericValue}`)
+              orConditions.push(`cm.eq.${numericValue}`)
+              orConditions.push(`quantity.eq.${numericValue}`)
+            }
+            
+            if (!isNaN(intValue)) {
+              orConditions.push(`bobin_sayisi.eq.${intValue}`)
+            }
+            
+            query = query.or(orConditions.join(','))
           }
         }
 
@@ -60,9 +108,14 @@ class OrdersRepository {
           query = query.in("requester", filters.requesters)
         }
 
-        if (filters.hideDelivered) {
-          console.log("[v0] Applying hideDelivered filter")
-          query = query.not("status", "in", '("Delivered","Cancelled")')
+        if (filters.hideDelivered !== undefined) {
+          if (filters.hideDelivered) {
+            console.log("[v0] Applying hideDelivered filter - showing only undelivered")
+            query = query.not("status", "in", '("Delivered","Cancelled")')
+          } else {
+            console.log("[v0] Applying hideDelivered filter - showing only delivered")
+            query = query.in("status", ["Delivered", "Cancelled"])
+          }
         }
 
         if (filters.dateRange) {
