@@ -251,24 +251,13 @@ export class BarcodeScanner {
     // Log all detected barcodes for debugging
     console.log("Raw barcode detected:", barcode)
 
-    // Validate and format the barcode
-    const formattedBarcode = BarcodeScanner.formatBarcode(barcode)
-    
-    if (BarcodeScanner.validateBarcodeFormat(formattedBarcode)) {
-      console.log("Valid barcode detected:", formattedBarcode)
-      
-      if (this.onScanCallback) {
-        this.onScanCallback(formattedBarcode)
-        // Stop scanning after successful detection to prevent multiple scans
-        this.stopScanning()
-      }
-    } else {
-      console.log("Invalid barcode format:", formattedBarcode, "- trying anyway...")
-      // Try the callback even if format validation fails
-      if (this.onScanCallback && barcode.trim().length > 0) {
-        this.onScanCallback(barcode.trim())
-        this.stopScanning()
-      }
+    // Always try the callback with any detected barcode
+    if (this.onScanCallback && barcode && barcode.trim().length > 0) {
+      const cleanBarcode = barcode.trim().toUpperCase()
+      console.log("Calling callback with barcode:", cleanBarcode)
+      this.onScanCallback(cleanBarcode)
+      // Stop scanning after successful detection to prevent multiple scans
+      this.stopScanning()
     }
   }
 
@@ -389,15 +378,44 @@ export class BarcodeScanner {
     }
   }
 
-  // Get scanner info for debugging
-  getInfo(): object {
-    return {
+  // Get scanner info for debugging - returns string to avoid alert issues
+  getInfo(): string {
+    const info = {
       isScanning: this.isScanning,
       hasVideo: !!this.video,
       hasCallback: !!this.onScanCallback,
       lastScanTime: this.lastScanTime,
       scanInterval: this.SCAN_INTERVAL,
-      zxingSupported: BarcodeScanner.isSupported()
+      zxingSupported: BarcodeScanner.isSupported(),
+      videoWidth: this.video?.videoWidth || 0,
+      videoHeight: this.video?.videoHeight || 0,
+      streamActive: this.stream?.active || false
     }
+    return JSON.stringify(info, null, 2)
+  }
+
+  // Force scan a specific area of the video
+  async forceScan(): Promise<string | null> {
+    if (!this.video || !this.isScanning) return null
+
+    try {
+      // Try direct video scan first
+      const result = await this.reader.decodeFromVideoElement(this.video)
+      if (result) {
+        return result.getText()
+      }
+    } catch (error) {
+      console.log("Force scan error:", error)
+    }
+
+    return null
+  }
+
+  // Get current camera device ID
+  getCurrentCameraId(): string | null {
+    if (!this.stream) return null
+    
+    const videoTrack = this.stream.getVideoTracks()[0]
+    return videoTrack?.getSettings()?.deviceId || null
   }
 }

@@ -19,6 +19,7 @@ export default function BarcodeScanPage() {
   const [searchHistory, setSearchHistory] = useState<string[]>([])
   const [availableCameras, setAvailableCameras] = useState<MediaDeviceInfo[]>([])
   const [selectedCameraId, setSelectedCameraId] = useState<string>("")
+  const [preferredCameraId, setPreferredCameraId] = useState<string>("")
   const videoRef = useRef<HTMLVideoElement>(null)
   const scannerRef = useRef<BarcodeScanner | null>(null)
 
@@ -62,11 +63,13 @@ export default function BarcodeScanPage() {
     }
   }
 
-  const startCamera = async () => {
+  const startCamera = async (forceDeviceId?: string) => {
     console.log("[ZXing] startCamera called")
     console.log("[ZXing] videoRef.current:", !!videoRef.current)
     console.log("[ZXing] scannerRef.current:", !!scannerRef.current)
     console.log("[ZXing] ZXing supported:", BarcodeScanner.isSupported())
+    console.log("[ZXing] forceDeviceId:", forceDeviceId)
+    console.log("[ZXing] preferredCameraId:", preferredCameraId)
     
     setError(null)
     setIsScanning(true)
@@ -102,6 +105,49 @@ export default function BarcodeScanPage() {
 
     try {
       console.log("[ZXing] Starting camera with video element:", videoRef.current)
+      
+      // Use forced device ID or preferred camera ID
+      const targetDeviceId = forceDeviceId || preferredCameraId
+      if (targetDeviceId) {
+        console.log("[ZXing] Using specific camera:", targetDeviceId)
+        // Temporarily override the camera selection in scanner
+        const originalStartScanning = scannerRef.current.startScanning.bind(scannerRef.current)
+        scannerRef.current.startScanning = async (videoElement, onScan, onError) => {
+          // Custom implementation to force specific camera
+          try {
+            const constraints = {
+              video: {
+                deviceId: { exact: targetDeviceId },
+                width: { ideal: 1920, min: 640 },
+                height: { ideal: 1080, min: 480 },
+                focusMode: 'continuous',
+                exposureMode: 'continuous',
+                whiteBalanceMode: 'continuous'
+              }
+            }
+            
+            const stream = await navigator.mediaDevices.getUserMedia(constraints)
+            videoElement.srcObject = stream
+            
+            await new Promise<void>((resolve, reject) => {
+              const timeout = setTimeout(() => reject(new Error('Video load timeout')), 10000)
+              videoElement.addEventListener('loadedmetadata', () => {
+                clearTimeout(timeout)
+                resolve()
+              }, { once: true })
+              videoElement.play().catch(reject)
+            })
+            
+            // Start scanning with the forced camera
+            return originalStartScanning(videoElement, onScan, onError)
+          } catch (error) {
+            console.error("Forced camera error:", error)
+            // Fallback to original method
+            return originalStartScanning(videoElement, onScan, onError)
+          }
+        }
+      }
+      
       await scannerRef.current.startScanning(
         videoRef.current,
         (barcode) => {
@@ -115,6 +161,15 @@ export default function BarcodeScanPage() {
           setIsScanning(false)
         }
       )
+      
+      // Update selected camera ID
+      if (scannerRef.current) {
+        const currentId = scannerRef.current.getCurrentCameraId()
+        if (currentId) {
+          setSelectedCameraId(currentId)
+          setPreferredCameraId(currentId)
+        }
+      }
     } catch (err) {
       console.error("startCamera error:", err)
       const errorMessage = err instanceof Error ? err.message : "Tarama başlatılamadı"
@@ -195,6 +250,17 @@ export default function BarcodeScanPage() {
         const cameras = await scannerRef.current.getAvailableCameras()
         setAvailableCameras(cameras)
         console.log("[ZXing] Available cameras:", cameras.length)
+        
+        // Set preferred back camera
+        const backCamera = cameras.find(camera => 
+          camera.label.toLowerCase().includes('back') || 
+          camera.label.toLowerCase().includes('rear') ||
+          camera.label.toLowerCase().includes('environment')
+        )
+        if (backCamera && !preferredCameraId) {
+          setPreferredCameraId(backCamera.deviceId)
+          console.log("[ZXing] Set preferred back camera:", backCamera.label)
+        }
       } catch (error) {
         console.log("Error loading cameras:", error)
       }
@@ -202,15 +268,63 @@ export default function BarcodeScanPage() {
   }
 
   const switchCamera = async (deviceId: string) => {
-    if (scannerRef.current && isScanning) {
-      try {
-        await scannerRef.current.switchCamera(deviceId)
-        setSelectedCameraId(deviceId)
-        console.log("[ZXing] Switched to camera:", deviceId)
-      } catch (error) {
-        console.error("Error switching camera:", error)
-        setError("Kamera değiştirilemedi")
-      }
+    console.log("[ZXing] Switching to camera:", deviceId)
+    setPreferredCameraId(deviceId)
+    
+    if (isScanning) {
+      // Stop current scanning and restart with new camera
+      stopCamera()
+      setTimeout(() => {
+        startCamera(deviceId)
+      }, 500)
+    }
+  }
+
+  const handleDebugClick = () => {
+    if (scannerRef.current) {
+      const info = scannerRef.current.getInfo()
+      console.log("Scanner Debug Info:", info)
+      
+      // Use a custom modal instead of alert to avoid camera freeze
+      const debugInfo = `Scanner Bilgisi:\n${info}`
+      
+      // Create a temporary div to show debug info
+      const debugDiv = document.createElement('div')
+      debugDiv.style.cssText = `
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        background: rgba(0,0,0,0.9);
+        color: white;
+        padding: 20px;
+        border-radius: 8px;
+        z-index: 10000;
+        max-width: 80%;
+        max-height: 80%;
+        overflow: auto;
+        font-family: monospace;
+        font-size: 12px;
+        white-space: pre-wrap;
+      `
+      debugDiv.textContent = debugInfo
+      
+      const closeButton = document.createElement('button')
+      closeButton.textContent = 'Kapat'
+      closeButton.style.cssText = `
+        display: block;
+        margin: 10px auto 0;
+        padding: 8px 16px;
+        background: #007bff;
+        color: white;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+      `
+      closeButton.onclick = () => document.body.removeChild(debugDiv)
+      
+      debugDiv.appendChild(closeButton)
+      document.body.appendChild(debugDiv)
     }
   }
 
@@ -399,11 +513,7 @@ export default function BarcodeScanPage() {
                     <Button 
                       variant="ghost" 
                       size="sm"
-                      onClick={() => {
-                        const info = scannerRef.current?.getInfo()
-                        console.log("Scanner Info:", info)
-                        alert(`Scanner Bilgisi:\n${JSON.stringify(info, null, 2)}`)
-                      }}
+                      onClick={handleDebugClick}
                       className="text-xs"
                     >
                       Debug
@@ -431,7 +541,7 @@ export default function BarcodeScanPage() {
           <CardContent className="space-y-4">
             <div className="flex gap-2">
               <Input
-                placeholder="Barkod numarasını girin (örn: WH7894349E1O37)"
+                placeholder="Barkod numarasını girin (örn: WH967843EU2ZMM)"
                 value={manualBarcode}
                 onChange={(e) => setManualBarcode(e.target.value)}
                 onKeyPress={(e) => e.key === "Enter" && handleManualSearch()}
@@ -440,6 +550,35 @@ export default function BarcodeScanPage() {
               <Button onClick={handleManualSearch} disabled={isLoading}>
                 <Search className="h-4 w-4" />
               </Button>
+            </div>
+            
+            {/* Quick test buttons */}
+            <div className="space-y-2">
+              <p className="text-xs text-muted-foreground">Hızlı Test:</p>
+              <div className="flex gap-2 flex-wrap">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setManualBarcode("WH967843EU2ZMM")
+                    searchBarcode("WH967843EU2ZMM")
+                  }}
+                  className="text-xs"
+                >
+                  Test Barkod 1
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setManualBarcode("WH472121M6ZPXK")
+                    searchBarcode("WH472121M6ZPXK")
+                  }}
+                  className="text-xs"
+                >
+                  Test Barkod 2
+                </Button>
+              </div>
             </div>
             
             {/* Edge mobile specific help */}
