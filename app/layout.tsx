@@ -15,8 +15,6 @@ export const metadata: Metadata = {
   description: "Tedarikçi siparişlerini takip etmek için mobil uygulama. Offline çalışır, hızlı ve pratik.",
   generator: "v0.app",
   manifest: "/manifest.json",
-  themeColor: "#000000",
-  viewport: "width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no",
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
@@ -27,6 +25,16 @@ export const metadata: Metadata = {
   creator: "v0.app",
   publisher: "v0.app",
   robots: "noindex, nofollow, noarchive, nosnippet, noimageindex",
+}
+
+export function generateViewport() {
+  return {
+    width: "device-width",
+    initialScale: 1,
+    maximumScale: 1,
+    userScalable: false,
+    themeColor: "#000000",
+  }
 }
 
 export default function RootLayout({
