@@ -107,5 +107,7 @@
     "tailwindcss": "^4.1.9",
     "tw-animate-css": "1.3.3",
     "typescript": "^5"
-  }
+  },
+  "deploymentTimestamp": "2025-08-21T14:42:20.164Z",
+  "forceRedeploy": 1755787340164
 }

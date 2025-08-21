@@ -67,6 +67,7 @@ html {
         <link rel="apple-touch-icon" href="/images/company-logo.png" />
         <link rel="icon" type="image/png" href="/images/company-logo.png" />
         <link rel="icon" type="image/svg+xml" href="/images/company-logo.svg" />
+        <link rel="icon" type="image/x-icon" href="/favicon.ico" />
       </head>
       <body className="min-h-screen bg-background text-foreground antialiased" suppressHydrationWarning>
         <ThemeProvider
