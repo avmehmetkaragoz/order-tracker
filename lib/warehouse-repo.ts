@@ -127,10 +127,62 @@ class WarehouseRepository {
 
   async getItemByBarcode(barcode: string): Promise<WarehouseItem | null> {
     console.log("[v0] WarehouseRepository.getItemByBarcode called with barcode:", barcode)
-    const { data, error } = await supabase.from("warehouse_items").select("*").eq("barcode", barcode).single()
+    
+    // Normalize the barcode for better matching
+    const normalizedBarcode = this.normalizeBarcode(barcode)
+    console.log("[v0] Normalized barcode:", normalizedBarcode)
+
+    // Try exact match first (case-insensitive)
+    let { data, error } = await supabase
+      .from("warehouse_items")
+      .select("*")
+      .ilike("barcode", normalizedBarcode)
+      .single()
+
+    // If exact match fails, try partial match for warehouse barcodes
+    if (error && normalizedBarcode.startsWith('WH')) {
+      console.log("[v0] Exact match failed, trying partial match for warehouse barcode")
+      
+      const { data: partialData, error: partialError } = await supabase
+        .from("warehouse_items")
+        .select("*")
+        .ilike("barcode", `%${normalizedBarcode}%`)
+        .limit(1)
+        .single()
+
+      if (!partialError && partialData) {
+        data = partialData
+        error = null
+        console.log("[v0] Found item with partial match:", partialData.barcode)
+      }
+    }
+
+    // If still no match, try without WH prefix
+    if (error && normalizedBarcode.startsWith('WH')) {
+      const withoutPrefix = normalizedBarcode.substring(2)
+      console.log("[v0] Trying without WH prefix:", withoutPrefix)
+      
+      const { data: noPrefixData, error: noPrefixError } = await supabase
+        .from("warehouse_items")
+        .select("*")
+        .ilike("barcode", `%${withoutPrefix}%`)
+        .limit(1)
+        .single()
+
+      if (!noPrefixError && noPrefixData) {
+        data = noPrefixData
+        error = null
+        console.log("[v0] Found item without WH prefix:", noPrefixData.barcode)
+      }
+    }
 
     if (error) {
       console.error("[v0] Error fetching warehouse item by barcode:", error)
+      console.log("[v0] Tried searches for:", {
+        original: barcode,
+        normalized: normalizedBarcode,
+        withoutPrefix: normalizedBarcode.startsWith('WH') ? normalizedBarcode.substring(2) : null
+      })
       return null
     }
 
@@ -163,6 +215,31 @@ class WarehouseRepository {
 
     console.log("[v0] Mapped warehouse item by barcode:", mappedItem)
     return mappedItem
+  }
+
+  // Helper method to normalize barcodes for better matching
+  private normalizeBarcode(barcode: string): string {
+    if (!barcode || typeof barcode !== 'string') {
+      return ''
+    }
+
+    // Remove whitespace and convert to uppercase
+    let normalized = barcode.trim().toUpperCase()
+
+    // Remove common OCR errors and similar characters
+    normalized = normalized
+      .replace(/[O0]/g, '0')  // Normalize O and 0
+      .replace(/[I1L]/g, '1') // Normalize I, 1, and L
+      .replace(/[S5]/g, '5')  // Normalize S and 5
+      .replace(/[Z2]/g, '2')  // Normalize Z and 2
+
+    // Ensure WH prefix for warehouse barcodes if it looks like one
+    if (/^[A-Z0-9]{10,}$/.test(normalized) && !normalized.startsWith('WH')) {
+      // If it's a long alphanumeric string without WH prefix, it might be missing
+      console.log("[v0] Barcode might be missing WH prefix:", normalized)
+    }
+
+    return normalized
   }
 
   async getItemsByOrderId(orderId: string): Promise<WarehouseItem[]> {

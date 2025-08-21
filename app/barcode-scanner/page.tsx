@@ -246,13 +246,57 @@ export default function BarcodeScanPage() {
     }
   }
 
-  const handleDebugClick = () => {
+  const handleForceScan = async () => {
+    if (!scannerRef.current || !isScanning) {
+      console.log("[ForceScan] Scanner not ready")
+      return
+    }
+
+    console.log("[ForceScan] Manual scan triggered")
+    
+    try {
+      const result = await scannerRef.current.forceScan()
+      if (result) {
+        console.log("[ForceScan] Manual scan successful:", result)
+        setIsScanning(false)
+        searchBarcode(result)
+      } else {
+        console.log("[ForceScan] No barcode detected in current frame")
+        // Show temporary feedback
+        const feedbackDiv = document.createElement('div')
+        feedbackDiv.style.cssText = `
+          position: fixed;
+          top: 20px;
+          left: 50%;
+          transform: translateX(-50%);
+          background: rgba(255, 165, 0, 0.9);
+          color: white;
+          padding: 10px 20px;
+          border-radius: 4px;
+          z-index: 10000;
+          font-size: 14px;
+        `
+        feedbackDiv.textContent = 'Bu karede barkod bulunamadı. Barkodu daha net hizalayın.'
+        document.body.appendChild(feedbackDiv)
+        
+        setTimeout(() => {
+          if (document.body.contains(feedbackDiv)) {
+            document.body.removeChild(feedbackDiv)
+          }
+        }, 3000)
+      }
+    } catch (error) {
+      console.error("[ForceScan] Error during manual scan:", error)
+    }
+  }
+
+  const handleDebugClick = async () => {
     if (scannerRef.current) {
-      const info = scannerRef.current.getInfo()
-      console.log("Scanner Debug Info:", info)
+      const info = await scannerRef.current.getDetailedScanInfo()
+      console.log("Detailed Scanner Debug Info:", info)
       
       // Use a custom modal instead of alert to avoid camera freeze
-      const debugInfo = `Scanner Bilgisi:\n${info}`
+      const debugInfo = `Detaylı Scanner Bilgisi:\n${info}`
       
       // Create a temporary div to show debug info
       const debugDiv = document.createElement('div')
@@ -266,20 +310,26 @@ export default function BarcodeScanPage() {
         padding: 20px;
         border-radius: 8px;
         z-index: 10000;
-        max-width: 80%;
+        max-width: 90%;
         max-height: 80%;
         overflow: auto;
         font-family: monospace;
-        font-size: 12px;
+        font-size: 11px;
         white-space: pre-wrap;
       `
       debugDiv.textContent = debugInfo
       
+      const buttonContainer = document.createElement('div')
+      buttonContainer.style.cssText = `
+        display: flex;
+        gap: 10px;
+        margin: 15px auto 0;
+        justify-content: center;
+      `
+      
       const closeButton = document.createElement('button')
       closeButton.textContent = 'Kapat'
       closeButton.style.cssText = `
-        display: block;
-        margin: 10px auto 0;
         padding: 8px 16px;
         background: #007bff;
         color: white;
@@ -289,7 +339,29 @@ export default function BarcodeScanPage() {
       `
       closeButton.onclick = () => document.body.removeChild(debugDiv)
       
-      debugDiv.appendChild(closeButton)
+      const captureButton = document.createElement('button')
+      captureButton.textContent = 'Ekran Görüntüsü'
+      captureButton.style.cssText = `
+        padding: 8px 16px;
+        background: #28a745;
+        color: white;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+      `
+      captureButton.onclick = () => {
+        const frameData = scannerRef.current?.captureFrame()
+        if (frameData) {
+          const link = document.createElement('a')
+          link.download = `barcode-frame-${Date.now()}.png`
+          link.href = frameData
+          link.click()
+        }
+      }
+      
+      buttonContainer.appendChild(captureButton)
+      buttonContainer.appendChild(closeButton)
+      debugDiv.appendChild(buttonContainer)
       document.body.appendChild(debugDiv)
     }
   }
@@ -476,14 +548,24 @@ export default function BarcodeScanPage() {
                     Kamerayı Durdur
                   </Button>
                   {scannerRef.current && (
-                    <Button 
-                      variant="ghost" 
-                      size="sm"
-                      onClick={handleDebugClick}
-                      className="text-xs"
-                    >
-                      Debug
-                    </Button>
+                    <>
+                      <Button 
+                        variant="secondary" 
+                        size="sm"
+                        onClick={handleForceScan}
+                        className="text-xs"
+                      >
+                        Manuel Tara
+                      </Button>
+                      <Button 
+                        variant="ghost" 
+                        size="sm"
+                        onClick={handleDebugClick}
+                        className="text-xs"
+                      >
+                        Debug
+                      </Button>
+                    </>
                   )}
                 </div>
               </div>
