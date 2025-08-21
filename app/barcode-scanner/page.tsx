@@ -108,45 +108,7 @@ export default function BarcodeScanPage() {
       
       // Use forced device ID or preferred camera ID
       const targetDeviceId = forceDeviceId || preferredCameraId
-      if (targetDeviceId) {
-        console.log("[ZXing] Using specific camera:", targetDeviceId)
-        // Temporarily override the camera selection in scanner
-        const originalStartScanning = scannerRef.current.startScanning.bind(scannerRef.current)
-        scannerRef.current.startScanning = async (videoElement, onScan, onError) => {
-          // Custom implementation to force specific camera
-          try {
-            const constraints = {
-              video: {
-                deviceId: { exact: targetDeviceId },
-                width: { ideal: 1920, min: 640 },
-                height: { ideal: 1080, min: 480 },
-                focusMode: 'continuous',
-                exposureMode: 'continuous',
-                whiteBalanceMode: 'continuous'
-              }
-            }
-            
-            const stream = await navigator.mediaDevices.getUserMedia(constraints)
-            videoElement.srcObject = stream
-            
-            await new Promise<void>((resolve, reject) => {
-              const timeout = setTimeout(() => reject(new Error('Video load timeout')), 10000)
-              videoElement.addEventListener('loadedmetadata', () => {
-                clearTimeout(timeout)
-                resolve()
-              }, { once: true })
-              videoElement.play().catch(reject)
-            })
-            
-            // Start scanning with the forced camera
-            return originalStartScanning(videoElement, onScan, onError)
-          } catch (error) {
-            console.error("Forced camera error:", error)
-            // Fallback to original method
-            return originalStartScanning(videoElement, onScan, onError)
-          }
-        }
-      }
+      console.log("[ZXing] Target device ID:", targetDeviceId)
       
       await scannerRef.current.startScanning(
         videoRef.current,
@@ -159,15 +121,19 @@ export default function BarcodeScanPage() {
           console.log("Kamera hatası:", errorMessage)
           setError(errorMessage)
           setIsScanning(false)
-        }
+        },
+        targetDeviceId // Pass the preferred device ID
       )
       
-      // Update selected camera ID
+      // Update selected camera ID after successful start
       if (scannerRef.current) {
         const currentId = scannerRef.current.getCurrentCameraId()
         if (currentId) {
           setSelectedCameraId(currentId)
-          setPreferredCameraId(currentId)
+          // Only update preferred camera if we didn't force a specific one
+          if (!forceDeviceId) {
+            setPreferredCameraId(currentId)
+          }
         }
       }
     } catch (err) {
