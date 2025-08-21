@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 
 // Korunmayacak public path'ler
-const publicPaths = ['/login', '/api/auth']
+const publicPaths = ['/login']
 
 // Statik dosyalar ve Next.js internal path'leri
 const staticPaths = [
@@ -27,11 +27,14 @@ export function middleware(request: NextRequest) {
     return NextResponse.next()
   }
   
-  // Authentication cookie'sini kontrol et
-  const authCookie = request.cookies.get('auth-token')
+  // Authentication cookie'sini kontrol et (yeni sistem)
+  const authSession = request.cookies.get('auth-session')
+  
+  // Legacy authentication cookie'sini kontrol et (backward compatibility)
+  const legacyAuthCookie = request.cookies.get('auth-token')
   
   // Eğer authentication cookie'si yoksa login sayfasına yönlendir
-  if (!authCookie || authCookie.value !== process.env.AUTH_SECRET) {
+  if (!authSession && (!legacyAuthCookie || legacyAuthCookie.value !== process.env.AUTH_SECRET)) {
     const loginUrl = new URL('/login', request.url)
     loginUrl.searchParams.set('redirect', pathname)
     return NextResponse.redirect(loginUrl)
@@ -45,7 +48,7 @@ export const config = {
   matcher: [
     /*
      * Tüm request path'leri için çalış, aşağıdakiler hariç:
-     * - api (API routes)
+     * - api (API routes) - API routes kendi authentication'ını yapar
      * - _next/static (static files)
      * - _next/image (image optimization files)
      * - favicon.ico (favicon file)

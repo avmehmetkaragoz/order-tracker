@@ -7,10 +7,11 @@ import type {
 } from "@/types/warehouse"
 import { supabase } from "./supabase/client"
 import { QRGenerator } from "./qr-generator"
+import { ActivityLogger } from "./activity-logger"
 
 class WarehouseRepository {
   async getItems(filters?: WarehouseFilters): Promise<WarehouseItem[]> {
-    console.log("[v0] WarehouseRepository.getItems called with filters:", filters)
+    
 
     let query = supabase.from("warehouse_items").select("*")
 
@@ -43,19 +44,15 @@ class WarehouseRepository {
       }
     }
 
-    console.log("[v0] About to execute warehouse query")
+    
     const { data, error } = await query.order("created_at", { ascending: false })
 
     if (error) {
-      console.error("[v0] Detailed warehouse query error:", error)
-      console.error("[v0] Error code:", error.code)
-      console.error("[v0] Error message:", error.message)
-      console.error("[v0] Error details:", error.details)
       return []
     }
 
-    console.log("[v0] Warehouse query successful, returned", data?.length || 0, "items")
-    console.log("[v0] Raw warehouse items data:", data)
+    
+    
 
     if (!data) return []
 
@@ -82,20 +79,19 @@ class WarehouseRepository {
       tags: item.tags
     }))
 
-    console.log("[v0] Mapped warehouse items:", mappedItems)
+    
     return mappedItems
   }
 
   async getItemById(id: string): Promise<WarehouseItem | null> {
-    console.log("[v0] WarehouseRepository.getItemById called with id:", id)
+    
     const { data, error } = await supabase.from("warehouse_items").select("*").eq("id", id).single()
 
     if (error) {
-      console.error("[v0] Error fetching warehouse item:", error)
       return null
     }
 
-    console.log("[v0] Raw warehouse item data:", data)
+    
 
     if (!data) return null
 
@@ -122,15 +118,15 @@ class WarehouseRepository {
       tags: data.tags
     }
 
-    console.log("[v0] Mapped warehouse item:", mappedItem)
+    
     return mappedItem
   }
 
   async getItemByBarcode(barcode: string): Promise<WarehouseItem | null> {
-    console.log("[v0] WarehouseRepository.getItemByBarcode called with barcode:", barcode)
+    
     
     if (!barcode || typeof barcode !== 'string' || barcode.trim().length === 0) {
-      console.log("[v0] Invalid barcode provided")
+      
       return null
     }
 
@@ -142,7 +138,7 @@ class WarehouseRepository {
         const parts = searchBarcode.split('-C')
         if (parts.length === 2) {
           searchBarcode = parts[0] // Extract parent ID (DK250821B16)
-          console.log("[v0] Detected coil QR code, searching for parent item:", searchBarcode)
+          
         }
       }
 
@@ -150,15 +146,14 @@ class WarehouseRepository {
       const matchingItem = await this.findBarcodeWithStrategies(searchBarcode)
       
       if (matchingItem) {
-        console.log("[v0] Found matching item:", matchingItem.barcode)
+        
         return this.mapDatabaseItemToWarehouseItem(matchingItem)
       }
 
-      console.log("[v0] No warehouse item found for barcode:", searchBarcode)
+      
       return null
 
     } catch (error) {
-      console.error("[v0] Error in getItemByBarcode:", error)
       return null
     }
   }
@@ -212,13 +207,13 @@ class WarehouseRepository {
       .replace(/[Q]/g, '0')     // Q -> 0
       .replace(/[D]/g, '0')     // D -> 0 (sometimes confused with 0)
 
-    console.log("[v0] Normalized barcode:", barcode, "->", normalized)
+    
     return normalized
   }
 
   // Enhanced barcode matching with multiple strategies
   private async findBarcodeWithStrategies(searchBarcode: string): Promise<any | null> {
-    console.log("[v0] Finding barcode with multiple strategies:", searchBarcode)
+    
     
     // Get all items for manual searching
     const { data: allItems, error } = await supabase
@@ -226,16 +221,15 @@ class WarehouseRepository {
       .select("*")
 
     if (error) {
-      console.error("[v0] Error fetching all items:", error)
       return null
     }
 
     if (!allItems || allItems.length === 0) {
-      console.log("[v0] No items in database")
+      
       return null
     }
 
-    console.log("[v0] Searching through", allItems.length, "items")
+    
 
     const originalSearch = searchBarcode.trim().toUpperCase()
     const normalizedSearch = this.normalizeBarcode(searchBarcode)
@@ -247,7 +241,7 @@ class WarehouseRepository {
     })
 
     if (match) {
-      console.log("[v0] Strategy 1 - Exact match found:", match.barcode)
+      
       return match
     }
 
@@ -258,7 +252,7 @@ class WarehouseRepository {
     })
 
     if (match) {
-      console.log("[v0] Strategy 2 - Normalized exact match found:", match.barcode)
+      
       return match
     }
 
@@ -269,7 +263,7 @@ class WarehouseRepository {
     })
 
     if (match) {
-      console.log("[v0] Strategy 3 - Partial match found:", match.barcode)
+      
       return match
     }
 
@@ -281,7 +275,6 @@ class WarehouseRepository {
     })
 
     if (match) {
-      console.log("[v0] Strategy 4 - Fuzzy match found:", match.barcode, "distance:", this.calculateLevenshteinDistance(match.barcode.toUpperCase(), originalSearch))
       return match
     }
 
@@ -294,7 +287,7 @@ class WarehouseRepository {
       })
 
       if (match) {
-        console.log("[v0] Strategy 5 - Match without WH prefix found:", match.barcode)
+        
         return match
       }
     }
@@ -308,7 +301,7 @@ class WarehouseRepository {
       })
 
       if (match) {
-        console.log("[v0] Strategy 6 - Match without DK prefix found:", match.barcode)
+        
         return match
       }
     }
@@ -323,13 +316,13 @@ class WarehouseRepository {
         })
 
         if (match) {
-          console.log("[v0] Strategy 7 - Date pattern match found:", match.barcode)
+          
           return match
         }
       }
     }
 
-    console.log("[v0] No match found with any strategy")
+    
     return null
   }
 
@@ -368,7 +361,6 @@ class WarehouseRepository {
     const { data, error } = await supabase.from("warehouse_items").select("*").eq("order_id", orderId)
 
     if (error) {
-      console.error("Error fetching warehouse items by order ID:", error)
       return []
     }
 
@@ -376,7 +368,7 @@ class WarehouseRepository {
   }
 
   async addItem(item: Omit<WarehouseItem, "id" | "barcode"> & { barcode?: string }): Promise<WarehouseItem> {
-    console.log("[v0] WarehouseRepository.addItem called with:", item)
+    
     
     // Generate new TEXT ID using our new format
     const newId = this.generateBarcode(item.customerName)
@@ -404,20 +396,15 @@ class WarehouseRepository {
       tags: item.tags || null, // Handle tags field
     }
 
-    console.log("[v0] Mapped database item with new ID:", dbItem)
+    
 
     const { data, error } = await supabase.from("warehouse_items").insert([dbItem]).select().single()
 
     if (error) {
-      console.error("[v0] Error adding warehouse item:", error)
-      console.error("[v0] Error code:", error.code)
-      console.error("[v0] Error message:", error.message)
-      console.error("[v0] Error details:", error.details)
-      console.error("[v0] Error hint:", error.hint)
       throw new Error(`Failed to add warehouse item: ${error.message}`)
     }
 
-    console.log("[v0] Warehouse item added successfully:", data)
+    
 
     // Create initial stock movement
     await this.addStockMovement({
@@ -436,7 +423,6 @@ class WarehouseRepository {
     const { data, error } = await supabase.from("warehouse_items").update(updates).eq("id", id).select().single()
 
     if (error) {
-      console.error("Error updating warehouse item:", error)
       return null
     }
 
@@ -453,7 +439,7 @@ class WarehouseRepository {
       notes: string
     }
   ): Promise<WarehouseItem | null> {
-    console.log("[v0] WarehouseRepository.updateItemDetails called with:", { itemId, editData })
+    
     
     const item = await this.getItemById(itemId)
     if (!item) {
@@ -502,7 +488,7 @@ class WarehouseRepository {
         })
       }
 
-      console.log("[v0] Warehouse item updated successfully:", data)
+      
 
       // Return updated item
       return this.getItemById(itemId)
@@ -524,7 +510,7 @@ class WarehouseRepository {
   }
 
   async getStockMovements(warehouseItemId?: string): Promise<StockMovement[]> {
-    console.log("[v0] WarehouseRepository.getStockMovements called with warehouseItemId:", warehouseItemId)
+    
     let query = supabase.from("stock_movements").select("*")
 
     if (warehouseItemId) {
@@ -538,7 +524,7 @@ class WarehouseRepository {
       return []
     }
 
-    console.log("[v0] Raw stock movements data:", data)
+    
 
     if (!data) return []
 
@@ -559,7 +545,7 @@ class WarehouseRepository {
       orderId: movement.order_id
     }))
 
-    console.log("[v0] Mapped stock movements:", mappedMovements)
+    
     return mappedMovements
   }
 
@@ -570,7 +556,7 @@ class WarehouseRepository {
     operator: string;
     notes?: string;
   }): Promise<any> {
-    console.log("[v0] Adding stock movement:", movement)
+    
     const { data, error } = await supabase.from("stock_movements").insert([movement]).select().single()
 
     if (error) {
@@ -578,7 +564,7 @@ class WarehouseRepository {
       throw new Error("Failed to add stock movement")
     }
 
-    console.log("[v0] Stock movement added:", data)
+    
     return data
   }
 
@@ -636,7 +622,7 @@ class WarehouseRepository {
       customerName?: string
     }
   ): Promise<WarehouseItem | null> {
-    console.log("[v0] WarehouseRepository.processProductReturn called with:", { itemId, returnData })
+    
     
     const item = await this.getItemById(itemId)
     if (!item) {
@@ -702,7 +688,7 @@ class WarehouseRepository {
         throw new Error(`Failed to update warehouse item: ${error.message}`)
       }
 
-      console.log("[v0] Warehouse item updated successfully:", data)
+      
 
       // Return updated item
       return this.getItemById(itemId)
@@ -723,7 +709,7 @@ class WarehouseRepository {
       notes?: string
     }
   ): Promise<WarehouseItem | null> {
-    console.log("[v0] WarehouseRepository.processProductExit called with:", { itemId, exitData })
+    
     
     const item = await this.getItemById(itemId)
     if (!item) {
@@ -742,11 +728,7 @@ class WarehouseRepository {
     // If only coils are specified (no weight), calculate weight based on coils
     if (exitData.bobinExit > 0 && exitData.weightExit === 0) {
       totalWeightExit = exitData.bobinExit * weightPerCoil
-      console.log("[v0] Calculated weight from coils:", { 
-        bobinExit: exitData.bobinExit, 
-        weightPerCoil, 
-        totalWeightExit 
-      })
+      
     }
     // If both weight and coils are specified, use the specified weight
     // If only weight is specified, use that weight
@@ -811,7 +793,14 @@ class WarehouseRepository {
         throw new Error(`Failed to update warehouse item: ${error.message}`)
       }
 
-      console.log("[v0] Warehouse item updated successfully:", data)
+      // Log activity
+      ActivityLogger.warehouseStockOut(itemId, {
+        weight_exit: totalWeightExit,
+        bobin_exit: exitData.bobinExit,
+        exit_location: exitData.exitLocation,
+        reason: exitData.reason
+      })
+      
 
       // Return updated item
       return this.getItemById(itemId)
@@ -860,7 +849,7 @@ class WarehouseRepository {
   }
 
   async getAvailableStockBySpecs(cm: number, mikron: number, material: string): Promise<WarehouseItem[]> {
-    console.log("[v0] WarehouseRepository.getAvailableStockBySpecs called with:", { cm, mikron, material })
+    
     
     const { data, error } = await supabase
       .from("warehouse_items")
@@ -877,7 +866,7 @@ class WarehouseRepository {
       return []
     }
 
-    console.log("[v0] Found", data?.length || 0, "available stock items")
+    
 
     if (!data) return []
 
@@ -904,15 +893,15 @@ class WarehouseRepository {
       tags: item.tags
     }))
 
-    console.log("[v0] Mapped available stock items:", mappedItems)
+    
     return mappedItems
   }
 
   async getWarehouseSummary(): Promise<WarehouseSummary> {
-    console.log("[v0] WarehouseRepository.getWarehouseSummary called")
+    
 
     const items = await this.getItems()
-    console.log("[v0] Got", items.length, "items for summary calculation")
+    
 
     const summary: WarehouseSummary = {
       totalItems: items.length,

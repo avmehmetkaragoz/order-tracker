@@ -1,20 +1,15 @@
 import type { Order, OrderFilters } from "@/types/order"
 import { supabase } from "./supabase/client"
+import { ActivityLogger } from "./activity-logger"
 
 class OrdersRepository {
   async list(filters?: OrderFilters): Promise<Order[]> {
-    console.log("[v0] OrdersRepository.list called with filters:", filters)
-
     try {
       let query = supabase.from("orders").select("*")
-      console.log("[v0] Base query created")
 
       if (filters) {
-        console.log("[v0] Applying filters:", filters)
-
         if (filters.search) {
           const searchLower = filters.search.toLowerCase()
-          console.log("[v0] Applying search filter:", searchLower)
 
           if (filters.searchField) {
             // Search in specific field
@@ -94,37 +89,29 @@ class OrdersRepository {
         }
 
         if (filters.statuses && filters.statuses.length > 0) {
-          console.log("[v0] Applying status filter:", filters.statuses)
           query = query.in("status", filters.statuses)
         }
 
         if (filters.suppliers && filters.suppliers.length > 0) {
-          console.log("[v0] Applying supplier filter:", filters.suppliers)
           query = query.in("supplier", filters.suppliers)
         }
 
         if (filters.requesters && filters.requesters.length > 0) {
-          console.log("[v0] Applying requester filter:", filters.requesters)
           query = query.in("requester", filters.requesters)
         }
 
         if (filters.hideDelivered !== undefined) {
           if (filters.hideDelivered) {
-            console.log("[v0] Applying hideDelivered filter - showing only undelivered")
             query = query.not("status", "in", '("Delivered","Cancelled")')
           } else {
-            console.log("[v0] Applying hideDelivered filter - showing only delivered")
             query = query.in("status", ["Delivered", "Cancelled"])
           }
         }
 
         if (filters.dateRange) {
-          console.log("[v0] Applying date range filter:", filters.dateRange)
           query = query.gte("created_at", filters.dateRange.start).lte("created_at", filters.dateRange.end)
         }
       }
-
-      console.log("[v0] About to execute orders query")
       const { data, error } = await query.order("created_at", { ascending: false })
 
       if (error) {

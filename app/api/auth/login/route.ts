@@ -31,7 +31,6 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    console.log('✅ Authentication successful')
 
     // Response oluştur ve cookie ayarla
     const response = NextResponse.json(
@@ -50,7 +49,6 @@ export async function POST(request: NextRequest) {
 
     return response
   } catch (error) {
-    console.error('Login error:', error)
     return NextResponse.json(
       { error: 'Sunucu hatası' },
       { status: 500 }

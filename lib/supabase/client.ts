@@ -11,9 +11,9 @@ export const isSupabaseConfigured =
   supabaseAnonKey.length > 0
 
 if (!isSupabaseConfigured) {
-  console.error("[v0] Supabase environment variables are not properly configured")
-  console.error("[v0] NEXT_PUBLIC_SUPABASE_URL:", supabaseUrl ? "Set" : "Missing")
-  console.error("[v0] NEXT_PUBLIC_SUPABASE_ANON_KEY:", supabaseAnonKey ? "Set" : "Missing")
+  
+  
+  
 }
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
@@ -25,16 +25,16 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
 
 export const testSupabaseConnection = async () => {
   try {
-    console.log("[v0] Testing Supabase connection...")
+    
     const { data, error } = await supabase.from("orders").select("count").limit(1)
     if (error) {
-      console.error("[v0] Supabase connection test failed:", error)
+      
       return false
     }
-    console.log("[v0] Supabase connection test successful")
+    
     return true
   } catch (err) {
-    console.error("[v0] Supabase connection test error:", err)
+    
     return false
   }
 }

@@ -35,10 +35,8 @@ export default function SettingsPageContent() {
 
   const [suppliers, setSuppliers] = useState<string[]>([])
   const [requesters, setRequesters] = useState<string[]>([])
-  const [customers, setCustomers] = useState<string[]>([])
   const [newSupplier, setNewSupplier] = useState("")
   const [newRequester, setNewRequester] = useState("")
-  const [newCustomer, setNewCustomer] = useState("")
   const [orderCount, setOrderCount] = useState(0)
   const [prices, setPrices] = useState<SupplierPrice[]>([])
   const [newPrice, setNewPrice] = useState({
@@ -57,24 +55,21 @@ export default function SettingsPageContent() {
 
   const loadData = async () => {
     try {
-      const [suppliersData, requestersData, customersData, ordersData, pricesData] = await Promise.all([
+      const [suppliersData, requestersData, ordersData, pricesData] = await Promise.all([
         settingsRepo.getSuppliers(),
         settingsRepo.getRequesters(),
-        settingsRepo.getCustomers(),
         ordersRepo.list(),
         pricingRepo.getPrices(),
       ])
 
       setSuppliers(Array.isArray(suppliersData) ? suppliersData : [])
       setRequesters(Array.isArray(requestersData) ? requestersData : [])
-      setCustomers(Array.isArray(customersData) ? customersData : [])
       setOrderCount(Array.isArray(ordersData) ? ordersData.length : 0)
       setPrices(Array.isArray(pricesData) ? pricesData : [])
     } catch (error) {
       console.error("Error loading settings data:", error)
       setSuppliers([])
       setRequesters([])
-      setCustomers([])
       setOrderCount(0)
       setPrices([])
     }
@@ -169,49 +164,6 @@ export default function SettingsPageContent() {
     }
   }
 
-  const handleAddCustomer = async (customer: string) => {
-    if (customers.includes(customer)) {
-      toast({
-        title: "Hata",
-        description: "Bu müşteri zaten mevcut",
-        variant: "destructive",
-      })
-      return
-    }
-
-    try {
-      await settingsRepo.addCustomer(customer)
-      setNewCustomer("")
-      await loadData()
-      toast({
-        title: "Başarılı",
-        description: "Müşteri eklendi",
-      })
-    } catch (error) {
-      toast({
-        title: "Hata",
-        description: "Müşteri eklenirken bir hata oluştu",
-        variant: "destructive",
-      })
-    }
-  }
-
-  const handleRemoveCustomer = async (customer: string) => {
-    try {
-      await settingsRepo.removeCustomer(customer)
-      await loadData()
-      toast({
-        title: "Başarılı",
-        description: "Müşteri silindi",
-      })
-    } catch (error) {
-      toast({
-        title: "Hata",
-        description: "Müşteri silinirken bir hata oluştu",
-        variant: "destructive",
-      })
-    }
-  }
 
   const handleExportData = async () => {
     try {
@@ -299,7 +251,6 @@ export default function SettingsPageContent() {
       // Clear settings
       await settingsRepo.saveSuppliers([])
       await settingsRepo.saveRequesters([])
-      await settingsRepo.saveCustomers([])
 
       await loadData()
       toast({
@@ -517,12 +468,6 @@ export default function SettingsPageContent() {
               <div>
                 <div className="text-2xl font-bold text-primary">{getActivePrices().length}</div>
                 <div className="text-xs text-muted-foreground">Aktif Fiyat</div>
-              </div>
-            </div>
-            <div className="grid grid-cols-1 gap-4 text-center mt-4 pt-4 border-t">
-              <div>
-                <div className="text-2xl font-bold text-primary">{customers.length}</div>
-                <div className="text-xs text-muted-foreground">Müşteri</div>
               </div>
             </div>
           </CardContent>
@@ -876,64 +821,6 @@ export default function SettingsPageContent() {
           </CardContent>
         </Card>
 
-        {/* Customer Management */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base flex items-center gap-2">
-              <Users className="h-5 w-5" />
-              Müşteri Yönetimi
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex gap-2">
-              <Input
-                placeholder="Yeni müşteri adı"
-                value={newCustomer}
-                onChange={(e) => setNewCustomer(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && handleAddCustomer(newCustomer)}
-              />
-              <Button onClick={() => handleAddCustomer(newCustomer)} size="sm">
-                <Plus className="h-4 w-4" />
-              </Button>
-            </div>
-
-            <div className="space-y-2">
-              {customers.length === 0 ? (
-                <p className="text-sm text-muted-foreground text-center py-4">Henüz müşteri eklenmemiş</p>
-              ) : (
-                customers.map((customer) => (
-                  <div key={customer} className="flex items-center justify-between p-2 bg-muted/50 rounded-md">
-                    <span className="text-sm">{customer}</span>
-                    <AlertDialog>
-                      <AlertDialogTrigger asChild>
-                        <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-destructive">
-                          <Trash2 className="h-3 w-3" />
-                        </Button>
-                      </AlertDialogTrigger>
-                      <AlertDialogContent>
-                        <AlertDialogHeader>
-                          <AlertDialogTitle>Müşteriyi sil</AlertDialogTitle>
-                          <AlertDialogDescription>
-                            "{customer}" müşterisini silmek istediğinizden emin misiniz?
-                          </AlertDialogDescription>
-                        </AlertDialogHeader>
-                        <AlertDialogFooter>
-                          <AlertDialogCancel>İptal</AlertDialogCancel>
-                          <AlertDialogAction
-                            onClick={() => handleRemoveCustomer(customer)}
-                            className="bg-destructive text-destructive-foreground"
-                          >
-                            Sil
-                          </AlertDialogAction>
-                        </AlertDialogFooter>
-                      </AlertDialogContent>
-                    </AlertDialog>
-                  </div>
-                ))
-              )}
-            </div>
-          </CardContent>
-        </Card>
 
         {/* Data Management */}
         <Card>
@@ -997,6 +884,29 @@ export default function SettingsPageContent() {
               <p>• İçe aktarma mevcut verilerle birleştirir</p>
               <p>• Veri temizleme işlemi geri alınamaz</p>
             </div>
+          </CardContent>
+        </Card>
+
+        {/* Personnel Management */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base flex items-center gap-2">
+              <Users className="h-5 w-5" />
+              Personel Yönetimi
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="text-sm text-muted-foreground mb-3">
+              Kullanıcı ve yetki yönetimi
+            </div>
+            <Button
+              onClick={() => router.push("/personnel")}
+              className="w-full bg-transparent"
+              variant="outline"
+            >
+              <Users className="h-4 w-4 mr-2" />
+              Personel Yönetimi Sayfası
+            </Button>
           </CardContent>
         </Card>
 

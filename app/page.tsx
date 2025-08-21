@@ -1,16 +1,22 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import { useRouter } from "next/navigation"
 import { ordersRepo } from "@/lib/orders-repo"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { LoadingSpinner } from "@/components/loading-spinner"
 import { KeyboardShortcuts } from "@/components/keyboard-shortcuts"
-import { Settings, Plus, BarChart3, Clock, CheckCircle, Warehouse, QrCode, TestTube } from "lucide-react"
+import { Settings, Plus, BarChart3, Clock, CheckCircle, Warehouse, QrCode, TestTube, Users, LogOut } from "lucide-react"
+import { useToast } from "@/hooks/use-toast"
 
 export default function HomePage() {
+  const router = useRouter()
+  const { toast } = useToast()
   const [isInitialized, setIsInitialized] = useState(false)
+  const [isAuthenticated, setIsAuthenticated] = useState(false)
+  const [currentUser, setCurrentUser] = useState<any>(null)
   const [stats, setStats] = useState({
     total: 0,
     pending: 0,
@@ -19,8 +25,54 @@ export default function HomePage() {
   })
 
   useEffect(() => {
+    checkAuth()
     loadStats()
   }, [])
+
+  const checkAuth = async () => {
+    try {
+      const response = await fetch('/api/auth/check', {
+        cache: 'no-store',
+        headers: {
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache'
+        }
+      })
+      const data = await response.json()
+
+      if (data.success && data.user) {
+        setIsAuthenticated(true)
+        setCurrentUser(data.user)
+      }
+    } catch (error) {
+      // Not authenticated, continue as guest
+    }
+  }
+
+  const handleLogout = async () => {
+    try {
+      const response = await fetch('/api/auth/logout', {
+        method: 'POST'
+      })
+
+      if (response.ok) {
+        setIsAuthenticated(false)
+        setCurrentUser(null)
+        toast({
+          title: "Çıkış Yapıldı",
+          description: "Başarıyla çıkış yaptınız"
+        })
+        // Redirect to login with logout flag to prevent auto-login
+        router.push('/login?logout=true')
+      }
+    } catch (error) {
+      toast({
+        title: "Hata",
+        description: "Çıkış yapılırken bir hata oluştu",
+        variant: "destructive"
+      })
+    }
+  }
 
   const loadStats = () => {
     try {
@@ -41,7 +93,6 @@ export default function HomePage() {
         overdue: overdue.length,
       })
     } catch (error) {
-      console.error("[v0] Error loading stats:", error)
       // Set default stats if there's an error
       setStats({
         total: 0,
@@ -73,7 +124,14 @@ export default function HomePage() {
         <div className="text-center mb-8">
           <div className="text-4xl mb-3">📦</div>
           <h1 className="text-3xl font-bold mb-2">Sipariş Takip</h1>
-          <p className="text-muted-foreground">Tedarikçi siparişlerinizi kolayca yönetin</p>
+          <p className="text-muted-foreground">
+            Tedarikçi siparişlerinizi kolayca yönetin
+            {isAuthenticated && currentUser && (
+              <span className="block text-xs mt-1">
+                Hoş geldiniz, {currentUser.full_name || currentUser.username}
+              </span>
+            )}
+          </p>
         </div>
 
         {/* Stats Overview */}
@@ -215,6 +273,7 @@ export default function HomePage() {
               <kbd className="text-xs bg-muted px-1.5 py-0.5 rounded mt-2 inline-block">Ctrl+S</kbd>
             </CardContent>
           </Card>
+
 
           <Card
             className="cursor-pointer hover:bg-accent/50 transition-colors active:scale-95"
