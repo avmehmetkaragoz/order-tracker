@@ -1,4 +1,10 @@
-import { BrowserMultiFormatReader, Result, NotFoundException } from '@zxing/library'
+import { 
+  BrowserMultiFormatReader, 
+  Result, 
+  NotFoundException,
+  DecodeHintType,
+  BarcodeFormat
+} from '@zxing/library'
 
 // Barcode scanning utility using ZXing library
 export class BarcodeScanner {
@@ -9,10 +15,36 @@ export class BarcodeScanner {
   private onScanCallback: ((barcode: string) => void) | null = null
   private scanningInterval: NodeJS.Timeout | null = null
   private lastScanTime = 0
-  private readonly SCAN_INTERVAL = 500 // Scan every 500ms to prevent too frequent scanning
+  private readonly SCAN_INTERVAL = 300 // Reduced to 300ms for better responsiveness
+  private canvas: HTMLCanvasElement | null = null
+  private context: CanvasRenderingContext2D | null = null
 
   constructor() {
-    this.reader = new BrowserMultiFormatReader()
+    // Configure ZXing with hints for better barcode detection
+    const hints = new Map()
+    hints.set(DecodeHintType.POSSIBLE_FORMATS, [
+      BarcodeFormat.CODE_128,
+      BarcodeFormat.CODE_39,
+      BarcodeFormat.CODE_93,
+      BarcodeFormat.EAN_13,
+      BarcodeFormat.EAN_8,
+      BarcodeFormat.UPC_A,
+      BarcodeFormat.UPC_E,
+      BarcodeFormat.CODABAR,
+      BarcodeFormat.ITF,
+      BarcodeFormat.RSS_14,
+      BarcodeFormat.RSS_EXPANDED
+    ])
+    hints.set(DecodeHintType.TRY_HARDER, true)
+    hints.set(DecodeHintType.PURE_BARCODE, false)
+    
+    this.reader = new BrowserMultiFormatReader(hints)
+    
+    // Initialize canvas for image processing
+    if (typeof document !== 'undefined') {
+      this.canvas = document.createElement('canvas')
+      this.context = this.canvas.getContext('2d')
+    }
   }
 
   async startScanning(
@@ -54,24 +86,42 @@ export class BarcodeScanner {
         }
       }
 
-      // Start decoding from video device
+      // Start decoding from video device with enhanced configuration
       this.isScanning = true
       
-      await this.reader.decodeFromVideoDevice(
-        selectedDeviceId,
-        videoElement,
-        (result: Result | null, error?: Error) => {
-          if (result) {
-            this.handleScanResult(result.getText())
-          }
-          // Don't log NotFoundException as it's normal when no barcode is found
-          if (error && !(error instanceof NotFoundException)) {
-            console.log("Scan error:", error.message)
-          }
+      // Use higher resolution for better barcode detection
+      const constraints = {
+        video: {
+          deviceId: selectedDeviceId,
+          width: { ideal: 1920, min: 640 },
+          height: { ideal: 1080, min: 480 },
+          facingMode: selectedDeviceId ? undefined : 'environment',
+          focusMode: 'continuous',
+          exposureMode: 'continuous',
+          whiteBalanceMode: 'continuous'
         }
-      )
+      }
 
-      console.log("ZXing scanner started successfully")
+      // Get media stream with enhanced constraints
+      this.stream = await navigator.mediaDevices.getUserMedia(constraints)
+      videoElement.srcObject = this.stream
+
+      // Wait for video to be ready
+      await new Promise<void>((resolve, reject) => {
+        const timeout = setTimeout(() => reject(new Error('Video load timeout')), 10000)
+        
+        videoElement.addEventListener('loadedmetadata', () => {
+          clearTimeout(timeout)
+          resolve()
+        }, { once: true })
+        
+        videoElement.play().catch(reject)
+      })
+
+      // Start continuous scanning with multiple approaches
+      this.startContinuousScanning(videoElement)
+
+      console.log("Enhanced ZXing scanner started successfully")
 
     } catch (error) {
       console.error("Camera access error:", error)
@@ -94,6 +144,100 @@ export class BarcodeScanner {
     }
   }
 
+  private startContinuousScanning(videoElement: HTMLVideoElement): void {
+    const scanFrame = async () => {
+      if (!this.isScanning || !videoElement) return
+
+      try {
+        // Method 1: Direct ZXing scanning
+        const result = await this.reader.decodeFromVideoElement(videoElement)
+        if (result) {
+          this.handleScanResult(result.getText())
+          return
+        }
+      } catch (error) {
+        // NotFoundException is normal, ignore it
+        if (!(error instanceof NotFoundException)) {
+          console.log("Direct scan error:", error)
+        }
+      }
+
+      // Method 2: Canvas-based scanning with image enhancement
+      if (this.canvas && this.context) {
+        try {
+          await this.scanFromCanvas(videoElement)
+        } catch (error) {
+          console.log("Canvas scan error:", error)
+        }
+      }
+
+      // Continue scanning
+      if (this.isScanning) {
+        setTimeout(scanFrame, this.SCAN_INTERVAL)
+      }
+    }
+
+    // Start the scanning loop
+    scanFrame()
+  }
+
+  private async scanFromCanvas(videoElement: HTMLVideoElement): Promise<void> {
+    if (!this.canvas || !this.context) return
+
+    // Set canvas size to match video
+    this.canvas.width = videoElement.videoWidth
+    this.canvas.height = videoElement.videoHeight
+
+    // Draw video frame to canvas
+    this.context.drawImage(videoElement, 0, 0, this.canvas.width, this.canvas.height)
+
+    // Enhance image for better barcode detection
+    const imageData = this.context.getImageData(0, 0, this.canvas.width, this.canvas.height)
+    this.enhanceImageForBarcode(imageData)
+    this.context.putImageData(imageData, 0, 0)
+
+    // Convert canvas to data URL and create image element for ZXing
+    try {
+      const dataUrl = this.canvas.toDataURL('image/png')
+      const img = new Image()
+      
+      await new Promise<void>((resolve, reject) => {
+        img.onload = () => resolve()
+        img.onerror = () => reject(new Error('Failed to load enhanced image'))
+        img.src = dataUrl
+      })
+
+      // Try to decode from enhanced image
+      const result = await this.reader.decodeFromImageElement(img)
+      if (result) {
+        this.handleScanResult(result.getText())
+      }
+    } catch (error) {
+      // NotFoundException is normal
+      if (!(error instanceof NotFoundException)) {
+        console.log("Canvas decode error:", error)
+      }
+    }
+  }
+
+  private enhanceImageForBarcode(imageData: ImageData): void {
+    const data = imageData.data
+    
+    // Convert to grayscale and increase contrast
+    for (let i = 0; i < data.length; i += 4) {
+      // Calculate grayscale value
+      const gray = Math.round(0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2])
+      
+      // Increase contrast for better barcode detection
+      const enhanced = gray < 128 ? Math.max(0, gray - 30) : Math.min(255, gray + 30)
+      
+      data[i] = enhanced     // Red
+      data[i + 1] = enhanced // Green
+      data[i + 2] = enhanced // Blue
+      // Alpha channel remains unchanged
+    }
+  }
+
   private handleScanResult(barcode: string): void {
     const now = Date.now()
     
@@ -103,6 +247,9 @@ export class BarcodeScanner {
     }
 
     this.lastScanTime = now
+
+    // Log all detected barcodes for debugging
+    console.log("Raw barcode detected:", barcode)
 
     // Validate and format the barcode
     const formattedBarcode = BarcodeScanner.formatBarcode(barcode)
@@ -116,7 +263,12 @@ export class BarcodeScanner {
         this.stopScanning()
       }
     } else {
-      console.log("Invalid barcode format:", formattedBarcode)
+      console.log("Invalid barcode format:", formattedBarcode, "- trying anyway...")
+      // Try the callback even if format validation fails
+      if (this.onScanCallback && barcode.trim().length > 0) {
+        this.onScanCallback(barcode.trim())
+        this.stopScanning()
+      }
     }
   }
 
@@ -135,6 +287,12 @@ export class BarcodeScanner {
       this.reader.reset()
     } catch (error) {
       console.log("Error resetting reader:", error)
+    }
+
+    // Stop media stream
+    if (this.stream) {
+      this.stream.getTracks().forEach(track => track.stop())
+      this.stream = null
     }
 
     if (this.video) {
