@@ -11,6 +11,8 @@ import { Badge } from "@/components/ui/badge"
 import { LoadingSpinner } from "@/components/loading-spinner"
 import { BarcodePrinter } from "@/components/barcode-printer"
 import { ReturnBarcodePrinter } from "@/components/return-barcode-printer"
+import { QRDisplay } from "@/components/qr-display"
+import { QRPrinter } from "@/components/qr-printer"
 import { ArrowLeft, Package, History, Edit, TrendingDown, TrendingUp, RotateCcw, LogOut, Undo2, ExternalLink } from "lucide-react"
 import { ProductExitDialog, type ProductExitData } from "@/components/product-exit-dialog"
 import { ProductEditDialog, type ProductEditData } from "@/components/product-edit-dialog"
@@ -26,14 +28,29 @@ export default function WarehouseItemDetailPage({ params }: { params: Promise<{ 
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
   const [isReturnDialogOpen, setIsReturnDialogOpen] = useState(false)
   const [isProcessing, setIsProcessing] = useState(false)
+  const [highlightedCoil, setHighlightedCoil] = useState<string | null>(null)
 
   useEffect(() => {
     loadItemData()
+    
+    // Check URL parameters for coil highlighting
+    if (typeof window !== 'undefined') {
+      const urlParams = new URLSearchParams(window.location.search)
+      const coilParam = urlParams.get('coil')
+      if (coilParam) {
+        setHighlightedCoil(coilParam)
+        console.log("[WarehouseDetail] Highlighting coil:", coilParam)
+      }
+    }
   }, [itemId])
 
   const loadItemData = async () => {
+    // Support both UUID (legacy) and new DK format
     const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
-    if (!uuidRegex.test(itemId)) {
+    const dkFormatRegex = /^DK\d{6}[A-Z]\d{2}$/i // DK + YYMMDD + Letter + 2 digits
+    
+    if (!uuidRegex.test(itemId) && !dkFormatRegex.test(itemId)) {
+      console.log("[v0] Invalid item ID format:", itemId)
       setIsLoading(false)
       return
     }
@@ -263,6 +280,19 @@ export default function WarehouseItemDetailPage({ params }: { params: Promise<{ 
           <div className="flex-1">
             <h1 className="text-2xl font-bold">Ürün Detayı</h1>
             <p className="text-sm text-muted-foreground">{item.barcode}</p>
+            {highlightedCoil && (
+              <div className="mt-2 p-2 bg-blue-100 dark:bg-blue-900/30 border border-blue-300 dark:border-blue-700 rounded-md">
+                <div className="flex items-center gap-2">
+                  <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
+                  <span className="text-sm font-medium text-blue-700 dark:text-blue-300">
+                    Bobin C{highlightedCoil} QR kodu tarandı
+                  </span>
+                </div>
+                <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">
+                  Bu QR kod {highlightedCoil}. bobine aittir
+                </p>
+              </div>
+            )}
           </div>
         </div>
 
@@ -376,8 +406,28 @@ export default function WarehouseItemDetailPage({ params }: { params: Promise<{ 
           </CardContent>
         </Card>
 
-        {/* Barcode Printer */}
+
+        {/* QR Code Printer */}
         <div className="mb-6">
+          <QRPrinter
+            id={item.id}
+            title={`${item.cm}cm • ${item.mikron}μ • ${item.material}`}
+            material={item.material}
+            specifications={`${item.cm}cm • ${item.mikron}μ • ${item.material}`}
+            weight={item.currentWeight || 0}
+            supplier={item.supplier}
+            date={item.receivedDate ? formatDate(item.receivedDate) : "Belirtilmemiş"}
+            coilCount={item.bobinCount || 0}
+            showCoilQRCodes={!hasReturnMovements}
+            customer={orderDetails?.customer}
+            stockType={item.stockType}
+            location={item.location}
+            highlightedCoil={highlightedCoil}
+          />
+        </div>
+
+        {/* Legacy Barcode Printer - Hidden during QR transition */}
+        <div className="mb-6" style={{ display: 'none' }}>
           <BarcodePrinter
             barcode={item.barcode}
             title={`${item.cm}cm • ${item.mikron}μ • ${item.material}`}

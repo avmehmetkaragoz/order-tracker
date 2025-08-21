@@ -1,13 +1,13 @@
 "use client"
 
 import { useState } from "react"
-import { BarcodeGenerator } from "@/lib/barcode-generator"
+import { QRGenerator } from "@/lib/qr-generator"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { BarcodeDisplay } from "./barcode-display"
+import { QRDisplay } from "./qr-display"
 import { useToast } from "@/hooks/use-toast"
-import { Printer, Download, Eye, RotateCcw, Package2 } from "lucide-react"
+import { Printer, Download, Eye, RotateCcw, QrCode } from "lucide-react"
 import type { StockMovement } from "@/types/warehouse"
 
 interface ReturnBarcodePrinterProps {
@@ -41,12 +41,12 @@ export function ReturnBarcodePrinter({
     return null
   }
 
-  const handlePrintReturnBarcodes = async () => {
+  const handlePrintReturnQRCodes = async () => {
     setIsGenerating(true)
     try {
-      // Generate barcodes based on returned coil count, not movement count
-      const returnBarcodes: Array<{
-        barcode: string
+      // Generate QR codes based on returned coil count, not movement count
+      const returnQRCodes: Array<{
+        qrCode: string
         weight: number
         date: string
         condition: string
@@ -54,7 +54,7 @@ export function ReturnBarcodePrinter({
         notes: string
       }> = []
 
-      let barcodeIndex = 1
+      let qrIndex = 1
 
       returnOnlyMovements.forEach((movement) => {
         const returnDate = movement.movementDate ? new Date(movement.movementDate).toLocaleDateString("tr-TR") : "Belirtilmemiş"
@@ -75,27 +75,27 @@ export function ReturnBarcodePrinter({
         const totalReturnWeight = movement.weightAfter || 0
         const weightPerCoil = returnedCoilCount > 0 ? totalReturnWeight / returnedCoilCount : totalReturnWeight
 
-        // Generate one barcode for each returned coil
+        // Generate one QR code for each returned coil
         for (let i = 0; i < returnedCoilCount; i++) {
-          returnBarcodes.push({
-            barcode: `${parentBarcode}-R${String(barcodeIndex).padStart(2, '0')}`,
+          returnQRCodes.push({
+            qrCode: `${parentBarcode}-R${String(qrIndex).padStart(2, '0')}`,
             weight: weightPerCoil,
             date: returnDate,
             condition,
             operator: movement.operator || "",
             notes: movement.notes || ""
           })
-          barcodeIndex++
+          qrIndex++
         }
       })
 
-      const printableHTML = BarcodeGenerator.generateReturnLabels({
-        parentBarcode,
+      const printableHTML = await QRGenerator.generateReturnLabels({
+        parentQRCode: parentBarcode,
         title,
         specifications,
         supplier,
         customer,
-        returnBarcodes
+        returnQRCodes
       })
 
       // Open print window
@@ -111,8 +111,8 @@ export function ReturnBarcodePrinter({
         }, 500)
 
         toast({
-          title: "Dönüş Etiketleri Hazır",
-          description: `${returnBarcodes.length} adet dönüş etiketi yazdırma penceresi açıldı`,
+          title: "Dönüş QR Etiketleri Hazır",
+          description: `${returnQRCodes.length} adet dönüş QR etiketi yazdırma penceresi açıldı`,
         })
       } else {
         throw new Error("Popup engellendi")
@@ -121,7 +121,7 @@ export function ReturnBarcodePrinter({
       console.error("Print error:", error)
       toast({
         title: "Yazdırma Hatası",
-        description: "Dönüş etiketleri yazdırılırken bir hata oluştu",
+        description: "Dönüş QR etiketleri yazdırılırken bir hata oluştu",
         variant: "destructive",
       })
     } finally {
@@ -129,65 +129,74 @@ export function ReturnBarcodePrinter({
     }
   }
 
-  const handlePreviewReturnBarcodes = () => {
-    // Generate barcodes based on returned coil count, not movement count
-    const returnBarcodes: Array<{
-      barcode: string
-      weight: number
-      date: string
-      condition: string
-      operator: string
-      notes: string
-    }> = []
+  const handlePreviewReturnQRCodes = async () => {
+    try {
+      // Generate QR codes based on returned coil count, not movement count
+      const returnQRCodes: Array<{
+        qrCode: string
+        weight: number
+        date: string
+        condition: string
+        operator: string
+        notes: string
+      }> = []
 
-    let barcodeIndex = 1
+      let qrIndex = 1
 
-    returnOnlyMovements.forEach((movement) => {
-      const returnDate = movement.movementDate ? new Date(movement.movementDate).toLocaleDateString("tr-TR") : "Belirtilmemiş"
-      
-      // Extract condition from notes if available
-      let condition = "Kullanılabilir"
-      if (movement.notes?.includes("Hasarlı")) {
-        condition = "Hasarlı"
-      } else if (movement.notes?.includes("Kontrol Gerekli")) {
-        condition = "Kontrol Gerekli"
+      returnOnlyMovements.forEach((movement) => {
+        const returnDate = movement.movementDate ? new Date(movement.movementDate).toLocaleDateString("tr-TR") : "Belirtilmemiş"
+        
+        // Extract condition from notes if available
+        let condition = "Kullanılabilir"
+        if (movement.notes?.includes("Hasarlı")) {
+          condition = "Hasarlı"
+        } else if (movement.notes?.includes("Kontrol Gerekli")) {
+          condition = "Kontrol Gerekli"
+        }
+
+        // Extract returned coil count from notes (e.g., "2 bobin")
+        const bobinMatch = movement.notes?.match(/(\d+)\s*bobin/i)
+        const returnedCoilCount = bobinMatch ? parseInt(bobinMatch[1]) : 1
+
+        // Calculate weight per coil for this return
+        const totalReturnWeight = movement.weightAfter || 0
+        const weightPerCoil = returnedCoilCount > 0 ? totalReturnWeight / returnedCoilCount : totalReturnWeight
+
+        // Generate one QR code for each returned coil
+        for (let i = 0; i < returnedCoilCount; i++) {
+          returnQRCodes.push({
+            qrCode: `${parentBarcode}-R${String(qrIndex).padStart(2, '0')}`,
+            weight: weightPerCoil,
+            date: returnDate,
+            condition,
+            operator: movement.operator || "",
+            notes: movement.notes || ""
+          })
+          qrIndex++
+        }
+      })
+
+      const printableHTML = await QRGenerator.generateReturnLabels({
+        parentQRCode: parentBarcode,
+        title,
+        specifications,
+        supplier,
+        customer,
+        returnQRCodes
+      })
+
+      const previewWindow = window.open("", "_blank")
+      if (previewWindow) {
+        previewWindow.document.write(printableHTML)
+        previewWindow.document.close()
       }
-
-      // Extract returned coil count from notes (e.g., "2 bobin")
-      const bobinMatch = movement.notes?.match(/(\d+)\s*bobin/i)
-      const returnedCoilCount = bobinMatch ? parseInt(bobinMatch[1]) : 1
-
-      // Calculate weight per coil for this return
-      const totalReturnWeight = movement.weightAfter || 0
-      const weightPerCoil = returnedCoilCount > 0 ? totalReturnWeight / returnedCoilCount : totalReturnWeight
-
-      // Generate one barcode for each returned coil
-      for (let i = 0; i < returnedCoilCount; i++) {
-        returnBarcodes.push({
-          barcode: `${parentBarcode}-R${String(barcodeIndex).padStart(2, '0')}`,
-          weight: weightPerCoil,
-          date: returnDate,
-          condition,
-          operator: movement.operator || "",
-          notes: movement.notes || ""
-        })
-        barcodeIndex++
-      }
-    })
-
-    const printableHTML = BarcodeGenerator.generateReturnLabels({
-      parentBarcode,
-      title,
-      specifications,
-      supplier,
-      customer,
-      returnBarcodes
-    })
-
-    const previewWindow = window.open("", "_blank")
-    if (previewWindow) {
-      previewWindow.document.write(printableHTML)
-      previewWindow.document.close()
+    } catch (error) {
+      console.error("Preview error:", error)
+      toast({
+        title: "Önizleme Hatası",
+        description: "Dönüş QR etiketleri önizlemesi açılırken bir hata oluştu",
+        variant: "destructive",
+      })
     }
   }
 
@@ -205,7 +214,7 @@ export function ReturnBarcodePrinter({
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-orange-900 dark:text-orange-100">
           <RotateCcw className="h-5 w-5" />
-          Dönüş Bobinleri Barkod Etiketleri
+          Dönüş Bobinleri QR Kod Etiketleri
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -231,7 +240,7 @@ export function ReturnBarcodePrinter({
               <span className="font-medium">{totalReturnedCoils} adet</span>
             </div>
             <div className="flex justify-between">
-              <span>Barkod Formatı:</span>
+              <span>QR Kod Formatı:</span>
               <span className="font-mono">{parentBarcode}-R01, R02...</span>
             </div>
           </div>
@@ -271,19 +280,19 @@ export function ReturnBarcodePrinter({
 
         {/* Action Buttons */}
         <div className="grid grid-cols-2 gap-2">
-          <Button 
-            variant="outline" 
-            size="sm" 
-            onClick={handlePreviewReturnBarcodes} 
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handlePreviewReturnQRCodes}
             className="bg-transparent border-orange-300 text-orange-700 hover:bg-orange-100 dark:border-orange-700 dark:text-orange-300 dark:hover:bg-orange-900/30"
           >
             <Eye className="h-4 w-4 mr-1" />
             Önizle
           </Button>
 
-          <Button 
-            size="sm" 
-            onClick={handlePrintReturnBarcodes} 
+          <Button
+            size="sm"
+            onClick={handlePrintReturnQRCodes}
             disabled={isGenerating}
             className="bg-orange-600 hover:bg-orange-700 text-white"
           >
@@ -293,7 +302,7 @@ export function ReturnBarcodePrinter({
         </div>
 
         <div className="text-xs text-orange-600 dark:text-orange-400 text-center">
-          Dönüş yapılan bobinleri ayrı takip etmek için kullanın
+          Dönüş yapılan bobinleri QR kod ile ayrı takip etmek için kullanın
         </div>
       </CardContent>
     </Card>

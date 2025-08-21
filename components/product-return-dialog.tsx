@@ -199,21 +199,33 @@ export function ProductReturnDialog({ open, onOpenChange, item, onConfirm }: Pro
     }
 
     // Mantıklı oran kontrolü - eğer hem ağırlık hem bobin girilmişse
+    // NOT: Bu kontrol sadece bilgilendirici - form gönderimini engellemez
+    let warningMessage = ""
     if (weightValue > 0 && bobinValue > 0) {
       const weightPerCoil = weightValue / bobinValue
       const originalWeightPerCoil = originalWeight > 0 && originalBobinCount > 0 ? originalWeight / originalBobinCount : 0
       
-      // Bobin başına ağırlık çok farklıysa uyarı ver
+      // Sadece çok aşırı durumlar için uyarı ver (örn: 10 kat fark)
+      // Kısmi dönüşlerde bobin başına ağırlık değişebilir
       if (originalWeightPerCoil > 0) {
         const ratio = weightPerCoil / originalWeightPerCoil
-        if (ratio > 1.5 || ratio < 0.5) {
-          newErrors.ratio = `Bobin başına ağırlık oranı mantıksız (${weightPerCoil.toFixed(1)}kg/bobin vs orijinal ${originalWeightPerCoil.toFixed(1)}kg/bobin)`
+        // Çok daha esnek limitler: 10 kat fazla veya 10 kat az
+        if (ratio > 10 || ratio < 0.1) {
+          warningMessage = `Bobin başına ağırlık oranı çok aşırı (${weightPerCoil.toFixed(1)}kg/bobin vs orijinal ${originalWeightPerCoil.toFixed(1)}kg/bobin). Lütfen kontrol edin.`
         }
       }
     }
 
     setErrors(newErrors)
-    return Object.keys(newErrors).length === 0
+    
+    // Uyarı mesajını ayrı state'te sakla (form gönderimini engellemez)
+    if (warningMessage) {
+      setErrors(prev => ({ ...prev, ratio: warningMessage }))
+    }
+    
+    // Sadece gerçek hataları kontrol et (ratio uyarısını hariç tut)
+    const realErrors = Object.keys(newErrors).filter(key => key !== 'ratio')
+    return realErrors.length === 0
   }
 
   const handleConfirm = () => {
@@ -350,9 +362,13 @@ export function ProductReturnDialog({ open, onOpenChange, item, onConfirm }: Pro
           )}
 
           {errors.ratio && (
-            <div className="text-xs text-orange-600 dark:text-orange-400 flex items-center gap-1">
+            <div className="text-xs text-yellow-600 dark:text-yellow-400 flex items-center gap-1 bg-yellow-50 dark:bg-yellow-950/20 p-2 rounded border border-yellow-200 dark:border-yellow-800">
               <AlertCircle className="h-3 w-3" />
-              {errors.ratio}
+              <div>
+                <div className="font-medium">Uyarı:</div>
+                <div>{errors.ratio}</div>
+                <div className="mt-1 text-xs">Bu normal olabilir - kısmi dönüşlerde ağırlık oranı değişebilir.</div>
+              </div>
             </div>
           )}
 
@@ -454,15 +470,15 @@ export function ProductReturnDialog({ open, onOpenChange, item, onConfirm }: Pro
             />
           </div>
 
-          {/* Yeni Barkod Oluştur */}
+          {/* Yeni QR Kod Oluştur */}
           <div className="flex items-center space-x-2">
             <Checkbox
-              id="generate-barcode"
+              id="generate-qrcode"
               checked={generateReturnBarcode}
               onCheckedChange={(checked) => setGenerateReturnBarcode(checked as boolean)}
             />
-            <Label htmlFor="generate-barcode" className="text-sm">
-              Dönen ürün için yeni barkod oluştur
+            <Label htmlFor="generate-qrcode" className="text-sm">
+              Dönen ürün için yeni QR kod oluştur
             </Label>
           </div>
         </div>

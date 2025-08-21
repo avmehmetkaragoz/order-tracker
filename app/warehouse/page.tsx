@@ -484,10 +484,10 @@ export default function WarehousePage() {
               variant="outline"
               size="sm"
               className="bg-transparent"
-              onClick={() => (window.location.href = "/barcode-scanner")}
+              onClick={() => (window.location.href = "/qr-scanner")}
             >
               <QrCode className="h-4 w-4 mr-1" />
-              Barkod Oku
+              QR Kod Oku
             </Button>
           </div>
         </div>

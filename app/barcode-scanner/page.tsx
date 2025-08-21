@@ -4,10 +4,11 @@ import { useState, useEffect, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
-import { ArrowLeft, Camera, Search, Package, MapPin, Calendar, RotateCcw } from "lucide-react"
+import { Badge } from "@/components/ui/badge"
+import { ArrowLeft, Camera, Search, Package, MapPin, Calendar, RotateCcw, Flashlight, FlashlightOff, Vibrate } from "lucide-react"
 import { warehouseRepo } from "@/lib/warehouse-repo"
 import { formatDate } from "@/lib/date-utils"
-import { BarcodeScanner } from "@/lib/barcode-scanner"
+import { QuaggaBarcodeScanner } from "@/lib/quagga-scanner"
 import type { WarehouseItem } from "@/types/warehouse"
 
 export default function BarcodeScanPage() {
@@ -20,8 +21,11 @@ export default function BarcodeScanPage() {
   const [availableCameras, setAvailableCameras] = useState<MediaDeviceInfo[]>([])
   const [selectedCameraId, setSelectedCameraId] = useState<string>("")
   const [preferredCameraId, setPreferredCameraId] = useState<string>("")
+  const [torchEnabled, setTorchEnabled] = useState(false)
+  const [scanCount, setScanCount] = useState(0)
   const videoRef = useRef<HTMLVideoElement>(null)
-  const scannerRef = useRef<BarcodeScanner | null>(null)
+  const scannerRef = useRef<QuaggaBarcodeScanner | null>(null)
+  const scannerContainerRef = useRef<HTMLDivElement>(null)
 
   const [browserInfo, setBrowserInfo] = useState({
     isEdge: false,
@@ -30,7 +34,9 @@ export default function BarcodeScanPage() {
     isEdgeMobile: false,
     hasMediaDevices: false,
     hasGetUserMedia: false,
-    zxingSupported: false
+    quaggaSupported: false,
+    userAgent: '',
+    platform: ''
   })
 
   const checkBrowserCompatibility = () => {
@@ -43,14 +49,16 @@ export default function BarcodeScanPage() {
         isEdgeMobile: false,
         hasMediaDevices: false,
         hasGetUserMedia: false,
-        zxingSupported: false
+        quaggaSupported: false,
+        userAgent: '',
+        platform: ''
       }
     }
 
     const userAgent = navigator.userAgent.toLowerCase()
     const isEdge = userAgent.includes('edge') || userAgent.includes('edg/')
     const isMobile = /android|iphone|ipad|ipod|blackberry|iemobile|opera mini/i.test(userAgent)
-    const isHTTPS = window.location.protocol === 'https:'
+    const isHTTPS = window.location.protocol === 'https:' || window.location.hostname === 'localhost'
     
     return {
       isEdge,
@@ -59,34 +67,44 @@ export default function BarcodeScanPage() {
       isEdgeMobile: isEdge && isMobile,
       hasMediaDevices: !!navigator.mediaDevices,
       hasGetUserMedia: !!navigator.mediaDevices?.getUserMedia,
-      zxingSupported: BarcodeScanner.isSupported()
+      quaggaSupported: QuaggaBarcodeScanner.isSupported(),
+      userAgent: navigator.userAgent,
+      platform: navigator.platform || 'Unknown'
     }
   }
 
   const startCamera = async (forceDeviceId?: string) => {
-    console.log("[ZXing] startCamera called")
-    console.log("[ZXing] videoRef.current:", !!videoRef.current)
-    console.log("[ZXing] scannerRef.current:", !!scannerRef.current)
-    console.log("[ZXing] ZXing supported:", BarcodeScanner.isSupported())
-    console.log("[ZXing] forceDeviceId:", forceDeviceId)
-    console.log("[ZXing] preferredCameraId:", preferredCameraId)
+    console.log("[Scanner] startCamera called")
+    console.log("[Scanner] scannerContainerRef.current:", !!scannerContainerRef.current)
+    console.log("[Scanner] scannerRef.current:", !!scannerRef.current)
+    console.log("[Scanner] Quagga supported:", QuaggaBarcodeScanner.isSupported())
+    console.log("[Scanner] forceDeviceId:", forceDeviceId)
+    console.log("[Scanner] preferredCameraId:", preferredCameraId)
     
     setError(null)
     setIsScanning(true)
+    setScanCount(0)
 
-    // Check ZXing support
-    if (!BarcodeScanner.isSupported()) {
-      setError("ZXing kütüphanesi desteklenmiyor. Lütfen tarayıcınızı güncelleyin.")
+    // Check Quagga support
+    if (!QuaggaBarcodeScanner.isSupported()) {
+      setError("Barkod tarama kütüphanesi desteklenmiyor. Lütfen tarayıcınızı güncelleyin.")
       setIsScanning(false)
       return
     }
 
-    // Wait a bit for video element to be ready (especially on mobile)
-    await new Promise(resolve => setTimeout(resolve, 100))
+    // Check HTTPS requirement for mobile
+    if (browserInfo.isMobile && !browserInfo.isHTTPS) {
+      setError("Mobil cihazlarda kamera erişimi için HTTPS bağlantısı gereklidir.")
+      setIsScanning(false)
+      return
+    }
+
+    // Wait a bit for container element to be ready (especially on mobile)
+    await new Promise(resolve => setTimeout(resolve, 200))
     
-    if (!videoRef.current) {
-      console.log("[ZXing] Video element still not found after delay")
-      setError("Video elementi henüz hazır değil. Lütfen tekrar deneyin.")
+    if (!scannerContainerRef.current) {
+      console.log("[Scanner] Container element still not found after delay")
+      setError("Tarama alanı henüz hazır değil. Lütfen tekrar deneyin.")
       setIsScanning(false)
       return
     }
@@ -94,8 +112,8 @@ export default function BarcodeScanPage() {
     if (!scannerRef.current) {
       // Try to initialize scanner if not already done
       if (typeof window !== 'undefined' && typeof document !== 'undefined') {
-        scannerRef.current = new BarcodeScanner()
-        console.log("[ZXing] BarcodeScanner initialized")
+        scannerRef.current = new QuaggaBarcodeScanner()
+        console.log("[Scanner] QuaggaBarcodeScanner initialized")
       } else {
         setError("Tarayıcı ortamı gerekli")
         setIsScanning(false)
@@ -104,25 +122,60 @@ export default function BarcodeScanPage() {
     }
 
     try {
-      console.log("[ZXing] Starting camera with video element:", videoRef.current)
+      console.log("[Scanner] Starting camera with container element:", scannerContainerRef.current)
       
       // Use forced device ID or preferred camera ID
       const targetDeviceId = forceDeviceId || preferredCameraId
-      console.log("[ZXing] Target device ID:", targetDeviceId)
+      console.log("[Scanner] Target device ID:", targetDeviceId)
       
       await scannerRef.current.startScanning(
-        videoRef.current,
+        scannerContainerRef.current,
         (barcode) => {
-          console.log("Barkod algılandı (ZXing):", barcode)
+          console.log("Barkod algılandı:", barcode)
+          setScanCount(prev => prev + 1)
+          
+          // Show detected barcode to user immediately
+          const cleanBarcode = barcode.trim().toUpperCase()
+          
+          // Create temporary notification
+          const notification = document.createElement('div')
+          notification.style.cssText = `
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(34, 197, 94, 0.9);
+            color: white;
+            padding: 12px 20px;
+            border-radius: 8px;
+            z-index: 10000;
+            font-size: 14px;
+            font-weight: 500;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+          `
+          notification.textContent = `Barkod okundu: ${cleanBarcode}`
+          document.body.appendChild(notification)
+          
+          setTimeout(() => {
+            if (document.body.contains(notification)) {
+              document.body.removeChild(notification)
+            }
+          }, 3000)
+          
+          // Vibrate on successful scan (mobile)
+          if (browserInfo.isMobile && 'vibrate' in navigator) {
+            navigator.vibrate(200)
+          }
+          
           setIsScanning(false)
           searchBarcode(barcode)
         },
         (errorMessage) => {
           console.log("Kamera hatası:", errorMessage)
-          setError(errorMessage)
+          setError(getMobileErrorMessage(errorMessage))
           setIsScanning(false)
         },
-        targetDeviceId // Pass the preferred device ID
+        targetDeviceId
       )
       
       // Update selected camera ID after successful start
@@ -139,9 +192,37 @@ export default function BarcodeScanPage() {
     } catch (err) {
       console.error("startCamera error:", err)
       const errorMessage = err instanceof Error ? err.message : "Tarama başlatılamadı"
-      setError(errorMessage)
+      setError(getMobileErrorMessage(errorMessage))
       setIsScanning(false)
     }
+  }
+
+  // Enhanced error message handling for mobile devices
+  const getMobileErrorMessage = (error: string): string => {
+    if (error.includes("Permission") || error.includes("NotAllowed")) {
+      if (browserInfo.isMobile) {
+        return "Kamera izni reddedildi. Mobil tarayıcı ayarlarından kamera iznini etkinleştirin ve sayfayı yenileyin."
+      }
+      return "Kamera izni reddedildi. Tarayıcı ayarlarından kamera iznini etkinleştirin."
+    }
+    
+    if (error.includes("NotFound") || error.includes("kamera bulunamadı")) {
+      return "Kamera bulunamadı. Cihazınızda kamera olduğundan ve başka uygulamalar tarafından kullanılmadığından emin olun."
+    }
+    
+    if (error.includes("NotReadable") || error.includes("Could not start")) {
+      return "Kamera başka bir uygulama tarafından kullanılıyor. Diğer kamera uygulamalarını kapatıp tekrar deneyin."
+    }
+    
+    if (error.includes("OverConstrained")) {
+      return "Seçilen kamera ayarları desteklenmiyor. Farklı bir kamera deneyin."
+    }
+    
+    if (browserInfo.isEdgeMobile) {
+      return `${error} - Edge mobil tarayıcısında sorun yaşıyorsanız Chrome tarayıcısını deneyin.`
+    }
+    
+    return error
   }
 
   const stopCamera = () => {
@@ -149,27 +230,59 @@ export default function BarcodeScanPage() {
       scannerRef.current.stopScanning()
     }
     setIsScanning(false)
+    setScanCount(0)
+    setTorchEnabled(false)
+  }
+
+  // Toggle torch/flashlight (if supported) - simplified for compatibility
+  const toggleTorch = async () => {
+    if (!scannerRef.current || !isScanning) return
+    
+    try {
+      // For now, just show a message that torch is not supported
+      // Real torch implementation would require access to MediaStreamTrack
+      console.log("Torch toggle requested - not implemented yet")
+      setTorchEnabled(!torchEnabled)
+    } catch (error) {
+      console.log("Torch toggle error:", error)
+    }
   }
 
   const searchBarcode = async (barcode: string) => {
     if (!barcode.trim()) return
 
+    const cleanBarcode = barcode.trim().toUpperCase()
+    console.log("[BarcodeScanner] Starting search for barcode:", cleanBarcode)
     setIsLoading(true)
     setError(null)
     setFoundItem(null)
 
     try {
-      const item = await warehouseRepo.getItemByBarcode(barcode.trim())
+      console.log("[BarcodeScanner] Calling warehouseRepo.getItemByBarcode with:", cleanBarcode)
+      const item = await warehouseRepo.getItemByBarcode(cleanBarcode)
+      console.log("[BarcodeScanner] warehouseRepo.getItemByBarcode returned:", item)
 
       if (item) {
+        console.log("[BarcodeScanner] Item found, setting foundItem")
         setFoundItem(item)
-        setSearchHistory((prev) => [barcode.trim(), ...prev.filter((h) => h !== barcode.trim())].slice(0, 5))
+        setSearchHistory((prev) => [cleanBarcode, ...prev.filter((h) => h !== cleanBarcode)].slice(0, 5))
+        
+        // Show success feedback
+        if (browserInfo.isMobile && 'vibrate' in navigator) {
+          navigator.vibrate([100, 50, 100]) // Success vibration pattern
+        }
       } else {
-        setError("Bu barkod ile eşleşen ürün bulunamadı")
+        console.log("[BarcodeScanner] No item found for barcode:", cleanBarcode)
+        setError(`Bu barkod ile eşleşen ürün bulunamadı: "${cleanBarcode}"`)
+        
+        // Show error feedback
+        if (browserInfo.isMobile && 'vibrate' in navigator) {
+          navigator.vibrate(300) // Error vibration
+        }
       }
     } catch (err) {
-      console.error("Barcode search error:", err)
-      setError("Arama sırasında bir hata oluştu")
+      console.error("[BarcodeScanner] Barcode search error:", err)
+      setError("Arama sırasında bir hata oluştu: " + (err instanceof Error ? err.message : String(err)))
     } finally {
       setIsLoading(false)
     }
@@ -187,10 +300,10 @@ export default function BarcodeScanPage() {
     // Set browser info on client side only
     setBrowserInfo(checkBrowserCompatibility())
     
-    // Initialize BarcodeScanner only in browser environment
+    // Initialize QuaggaBarcodeScanner only in browser environment
     if (typeof window !== 'undefined' && typeof document !== 'undefined') {
-      scannerRef.current = new BarcodeScanner()
-      console.log("[ZXing] BarcodeScanner initialized")
+      scannerRef.current = new QuaggaBarcodeScanner()
+      console.log("[Quagga] QuaggaBarcodeScanner initialized")
       
       // Load available cameras
       loadAvailableCameras()
@@ -198,10 +311,10 @@ export default function BarcodeScanPage() {
     
     // Check if we're in browser environment before accessing navigator
     if (typeof window !== 'undefined' && typeof navigator !== 'undefined') {
-      console.log("[ZXing] Navigator userAgent:", navigator.userAgent)
-      console.log("[ZXing] MediaDevices available:", !!navigator.mediaDevices)
-      console.log("[ZXing] getUserMedia available:", !!navigator.mediaDevices?.getUserMedia)
-      console.log("[ZXing] ZXing supported:", BarcodeScanner.isSupported())
+      console.log("[Quagga] Navigator userAgent:", navigator.userAgent)
+      console.log("[Quagga] MediaDevices available:", !!navigator.mediaDevices)
+      console.log("[Quagga] getUserMedia available:", !!navigator.mediaDevices?.getUserMedia)
+      console.log("[Quagga] Quagga supported:", QuaggaBarcodeScanner.isSupported())
     }
 
     return () => {
@@ -292,7 +405,7 @@ export default function BarcodeScanPage() {
 
   const handleDebugClick = async () => {
     if (scannerRef.current) {
-      const info = await scannerRef.current.getDetailedScanInfo()
+      const info = await scannerRef.current.getInfo()
       console.log("Detailed Scanner Debug Info:", info)
       
       // Use a custom modal instead of alert to avoid camera freeze
@@ -432,8 +545,8 @@ export default function BarcodeScanPage() {
           </Card>
         )}
 
-        {/* ZXing Support Warning */}
-        {!browserInfo.zxingSupported && (
+        {/* Quagga Support Warning */}
+        {!browserInfo.quaggaSupported && (
           <Card className="mb-6 border-yellow-500 bg-yellow-50 dark:bg-yellow-950">
             <CardHeader>
               <CardTitle className="text-yellow-700 dark:text-yellow-300 text-sm flex items-center gap-2">
@@ -442,7 +555,7 @@ export default function BarcodeScanPage() {
               </CardTitle>
             </CardHeader>
             <CardContent className="text-sm text-yellow-600 dark:text-yellow-400">
-              <p className="mb-2">ZXing kütüphanesi yüklenemedi. Manuel arama kullanın.</p>
+              <p className="mb-2">Quagga kütüphanesi yüklenemedi. Manuel arama kullanın.</p>
               <p className="mb-2"><strong>Olası nedenler:</strong></p>
               <ul className="list-disc list-inside space-y-1 text-xs">
                 <li>Tarayıcı eski sürüm</li>
@@ -459,9 +572,9 @@ export default function BarcodeScanPage() {
             <CardTitle className="flex items-center gap-2">
               <Camera className="h-5 w-5" />
               Kamera Tarama
-              {browserInfo.zxingSupported && (
+              {browserInfo.quaggaSupported && (
                 <span className="text-xs bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300 px-2 py-1 rounded">
-                  ZXing Aktif
+                  Quagga Aktif
                 </span>
               )}
             </CardTitle>
@@ -475,10 +588,10 @@ export default function BarcodeScanPage() {
                     startCamera()
                   }}
                   className="w-full"
-                  disabled={!browserInfo.zxingSupported}
+                  disabled={!browserInfo.quaggaSupported}
                 >
                   <Camera className="h-4 w-4 mr-2" />
-                  {browserInfo.zxingSupported ? "Kamerayı Başlat" : "Kamera Desteği Yok"}
+                  {browserInfo.quaggaSupported ? "Kamerayı Başlat" : "Kamera Desteği Yok"}
                 </Button>
                 
                 {/* Camera selection */}
@@ -511,14 +624,13 @@ export default function BarcodeScanPage() {
             ) : (
               <div className="space-y-4">
                 <div className="relative">
-                  <video
-                    ref={videoRef}
-                    className="w-full h-48 bg-black rounded-lg object-cover"
-                    playsInline
-                    autoPlay
-                    muted
-                    controls={false}
-                  />
+                  <div
+                    ref={scannerContainerRef}
+                    id="interactive"
+                    className="w-full h-48 bg-black rounded-lg relative overflow-hidden"
+                  >
+                    {/* Quagga will inject video element here */}
+                  </div>
                   <div className="absolute inset-0 border-2 border-dashed border-white/50 rounded-lg flex items-center justify-center pointer-events-none">
                     <div className="text-white text-sm bg-black/50 px-2 py-1 rounded">
                       Barkodu kamera görüş alanına getirin
@@ -626,6 +738,18 @@ export default function BarcodeScanPage() {
                 >
                   Test Barkod 2
                 </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    // Test with a slightly corrupted barcode to test fuzzy matching
+                    setManualBarcode("WH967843EU2ZM")
+                    searchBarcode("WH967843EU2ZM")
+                  }}
+                  className="text-xs"
+                >
+                  Test Fuzzy
+                </Button>
               </div>
             </div>
             
@@ -658,8 +782,19 @@ export default function BarcodeScanPage() {
           <Card className="mb-6 border-destructive">
             <CardContent className="py-6 text-center">
               <Package className="h-12 w-12 text-muted-foreground mx-auto mb-2" />
-              <h3 className="font-semibold text-destructive mb-1">Hata</h3>
-              <p className="text-sm text-muted-foreground">{error}</p>
+              <h3 className="font-semibold text-destructive mb-1">Ürün Bulunamadı</h3>
+              <p className="text-sm text-muted-foreground mb-3">{error}</p>
+              
+              {/* Suggestions for error */}
+              <div className="text-xs text-muted-foreground bg-muted p-3 rounded">
+                <p className="font-medium mb-2">Öneriler:</p>
+                <ul className="space-y-1 text-left">
+                  <li>• Barkodu tekrar kontrol edin</li>
+                  <li>• Kamerayı barkoda daha yakın tutun</li>
+                  <li>• Işık durumunu iyileştirin</li>
+                  <li>• Manuel arama ile deneyin</li>
+                </ul>
+              </div>
             </CardContent>
           </Card>
         )}

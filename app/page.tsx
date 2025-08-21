@@ -7,7 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge"
 import { LoadingSpinner } from "@/components/loading-spinner"
 import { KeyboardShortcuts } from "@/components/keyboard-shortcuts"
-import { Settings, Plus, BarChart3, Clock, CheckCircle, Warehouse, QrCode } from "lucide-react"
+import { Settings, Plus, BarChart3, Clock, CheckCircle, Warehouse, QrCode, TestTube } from "lucide-react"
 
 export default function HomePage() {
   const [isInitialized, setIsInitialized] = useState(false)
@@ -154,11 +154,11 @@ export default function HomePage() {
               variant="outline"
               className="w-full bg-transparent"
               size="lg"
-              onClick={() => (window.location.href = "/barcode-scanner")}
+              onClick={() => (window.location.href = "/qr-scanner")}
             >
               <QrCode className="h-4 w-4 mr-2" />
-              Barkod Okutma
-              <kbd className="ml-auto text-xs bg-muted px-1.5 py-0.5 rounded">B</kbd>
+              QR Kod Tarama
+              <kbd className="ml-auto text-xs bg-muted px-1.5 py-0.5 rounded">Q</kbd>
             </Button>
           </CardContent>
         </Card>
@@ -215,6 +215,18 @@ export default function HomePage() {
               <kbd className="text-xs bg-muted px-1.5 py-0.5 rounded mt-2 inline-block">Ctrl+S</kbd>
             </CardContent>
           </Card>
+
+          <Card
+            className="cursor-pointer hover:bg-accent/50 transition-colors active:scale-95"
+            onClick={() => (window.location.href = "/printer-test")}
+          >
+            <CardContent className="p-4 text-center">
+              <TestTube className="h-6 w-6 text-primary mx-auto mb-2" />
+              <div className="font-medium">Yazıcı Test Sayfası</div>
+              <div className="text-xs text-muted-foreground mt-1">10cm x 10cm QR etiket testi</div>
+              <kbd className="text-xs bg-muted px-1.5 py-0.5 rounded mt-2 inline-block">Ctrl+T</kbd>
+            </CardContent>
+          </Card>
         </div>
 
         {/* Keyboard Shortcuts Help */}
@@ -227,8 +239,8 @@ export default function HomePage() {
                 <kbd className="bg-background px-1.5 py-0.5 rounded">N</kbd>
               </div>
               <div className="flex justify-between">
-                <span>Barkod okutma</span>
-                <kbd className="bg-background px-1.5 py-0.5 rounded">B</kbd>
+                <span>QR kod tarama</span>
+                <kbd className="bg-background px-1.5 py-0.5 rounded">Q</kbd>
               </div>
               <div className="flex justify-between">
                 <span>Depo yönetimi</span>

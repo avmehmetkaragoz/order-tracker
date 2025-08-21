@@ -1,12 +1,43 @@
 {
-  "name": "my-v0-project",
-  "version": "0.1.0",
+  "name": "deka-order-tracker",
+  "version": "1.0.0",
+  "description": "DEKA Plastik Sipariş Takip ve Depo Yönetim Sistemi",
+  "homepage": "https://takip.dekaplastik.com",
   "private": true,
   "scripts": {
     "build": "next build",
-    "dev": "next dev",
+    "start": "next start",
+    "dev": "next dev --experimental-https",
+    "dev:https": "next dev --experimental-https",
     "lint": "next lint",
-    "start": "next start"
+    "type-check": "tsc --noEmit",
+    "setup:https": "node scripts/setup-https-dev.js",
+    "setup:https:auto": "node scripts/setup-https-dev.js auto",
+    "setup:https:builtin": "node scripts/setup-https-dev.js builtin",
+    "check:migration": "node check-migration.js",
+    "test:qr": "echo 'Testing QR code functionality...' && npm run dev:https",
+    "postbuild": "echo 'Build completed successfully for production deployment'"
+  },
+  "keywords": [
+    "order-tracking",
+    "warehouse-management",
+    "qr-codes",
+    "inventory",
+    "deka-plastik",
+    "nextjs",
+    "supabase"
+  ],
+  "author": {
+    "name": "DEKA Plastik",
+    "url": "https://dekaplastik.com"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/your-username/deka-order-tracker.git"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=8.0.0"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",
@@ -39,18 +70,22 @@
     "@radix-ui/react-tooltip": "1.1.6",
     "@supabase/auth-helpers-nextjs": "latest",
     "@supabase/supabase-js": "latest",
-    "@zxing/library": "^0.21.3",
+    "@types/qrcode": "^1.5.5",
     "autoprefixer": "^10.4.20",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "1.0.4",
     "date-fns": "4.1.0",
+    "dotenv": "^17.2.1",
     "embla-carousel-react": "8.5.1",
     "geist": "latest",
+    "html5-qrcode": "^2.3.8",
     "input-otp": "1.4.1",
     "lucide-react": "^0.454.0",
     "next": "15.2.4",
     "next-themes": "^0.4.6",
+    "qrcode": "^1.5.4",
+    "quagga": "^0.12.1",
     "react": "^19",
     "react-day-picker": "9.8.0",
     "react-dom": "^19",

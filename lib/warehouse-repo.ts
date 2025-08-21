@@ -6,6 +6,7 @@ import type {
   WarehouseItemStatus,
 } from "@/types/warehouse"
 import { supabase } from "./supabase/client"
+import { QRGenerator } from "./qr-generator"
 
 class WarehouseRepository {
   async getItems(filters?: WarehouseFilters): Promise<WarehouseItem[]> {
@@ -128,70 +129,43 @@ class WarehouseRepository {
   async getItemByBarcode(barcode: string): Promise<WarehouseItem | null> {
     console.log("[v0] WarehouseRepository.getItemByBarcode called with barcode:", barcode)
     
-    // Normalize the barcode for better matching
-    const normalizedBarcode = this.normalizeBarcode(barcode)
-    console.log("[v0] Normalized barcode:", normalizedBarcode)
-
-    // Try exact match first (case-insensitive)
-    let { data, error } = await supabase
-      .from("warehouse_items")
-      .select("*")
-      .ilike("barcode", normalizedBarcode)
-      .single()
-
-    // If exact match fails, try partial match for warehouse barcodes
-    if (error && normalizedBarcode.startsWith('WH')) {
-      console.log("[v0] Exact match failed, trying partial match for warehouse barcode")
-      
-      const { data: partialData, error: partialError } = await supabase
-        .from("warehouse_items")
-        .select("*")
-        .ilike("barcode", `%${normalizedBarcode}%`)
-        .limit(1)
-        .single()
-
-      if (!partialError && partialData) {
-        data = partialData
-        error = null
-        console.log("[v0] Found item with partial match:", partialData.barcode)
-      }
-    }
-
-    // If still no match, try without WH prefix
-    if (error && normalizedBarcode.startsWith('WH')) {
-      const withoutPrefix = normalizedBarcode.substring(2)
-      console.log("[v0] Trying without WH prefix:", withoutPrefix)
-      
-      const { data: noPrefixData, error: noPrefixError } = await supabase
-        .from("warehouse_items")
-        .select("*")
-        .ilike("barcode", `%${withoutPrefix}%`)
-        .limit(1)
-        .single()
-
-      if (!noPrefixError && noPrefixData) {
-        data = noPrefixData
-        error = null
-        console.log("[v0] Found item without WH prefix:", noPrefixData.barcode)
-      }
-    }
-
-    if (error) {
-      console.error("[v0] Error fetching warehouse item by barcode:", error)
-      console.log("[v0] Tried searches for:", {
-        original: barcode,
-        normalized: normalizedBarcode,
-        withoutPrefix: normalizedBarcode.startsWith('WH') ? normalizedBarcode.substring(2) : null
-      })
+    if (!barcode || typeof barcode !== 'string' || barcode.trim().length === 0) {
+      console.log("[v0] Invalid barcode provided")
       return null
     }
 
-    console.log("[v0] Raw warehouse item data by barcode:", data)
+    try {
+      let searchBarcode = barcode.trim()
+      
+      // Check if this is a coil QR code (format: DK250821B16-C01)
+      if (searchBarcode.includes('-C') && /^[A-Z0-9]+-C\d+$/i.test(searchBarcode)) {
+        const parts = searchBarcode.split('-C')
+        if (parts.length === 2) {
+          searchBarcode = parts[0] // Extract parent ID (DK250821B16)
+          console.log("[v0] Detected coil QR code, searching for parent item:", searchBarcode)
+        }
+      }
 
-    if (!data) return null
+      // Use enhanced barcode matching strategies
+      const matchingItem = await this.findBarcodeWithStrategies(searchBarcode)
+      
+      if (matchingItem) {
+        console.log("[v0] Found matching item:", matchingItem.barcode)
+        return this.mapDatabaseItemToWarehouseItem(matchingItem)
+      }
 
-    // Map database fields to TypeScript types
-    const mappedItem: WarehouseItem = {
+      console.log("[v0] No warehouse item found for barcode:", searchBarcode)
+      return null
+
+    } catch (error) {
+      console.error("[v0] Error in getItemByBarcode:", error)
+      return null
+    }
+  }
+
+  // Helper method to map database item to WarehouseItem
+  private mapDatabaseItemToWarehouseItem(data: any): WarehouseItem {
+    return {
       id: data.id,
       barcode: data.barcode,
       orderId: data.order_id,
@@ -201,10 +175,10 @@ class WarehouseRepository {
       currentWeight: data.current_weight,
       originalWeight: data.original_weight,
       bobinCount: data.coil_count,
-      originalBobinCount: data.original_coil_count || data.coil_count, // Use original_coil_count from DB
+      originalBobinCount: data.original_coil_count || data.coil_count,
       status: data.status,
-      stockType: data.stock_type || 'general', // Map stock_type from DB
-      customerName: data.customer_name, // Map customer_name from DB
+      stockType: data.stock_type || 'general',
+      customerName: data.customer_name,
       location: data.location,
       receivedDate: data.created_at,
       lastMovementDate: data.updated_at,
@@ -212,9 +186,6 @@ class WarehouseRepository {
       notes: data.notes,
       tags: data.tags
     }
-
-    console.log("[v0] Mapped warehouse item by barcode:", mappedItem)
-    return mappedItem
   }
 
   // Helper method to normalize barcodes for better matching
@@ -226,20 +197,171 @@ class WarehouseRepository {
     // Remove whitespace and convert to uppercase
     let normalized = barcode.trim().toUpperCase()
 
-    // Remove common OCR errors and similar characters
-    normalized = normalized
-      .replace(/[O0]/g, '0')  // Normalize O and 0
-      .replace(/[I1L]/g, '1') // Normalize I, 1, and L
-      .replace(/[S5]/g, '5')  // Normalize S and 5
-      .replace(/[Z2]/g, '2')  // Normalize Z and 2
+    // Remove any non-alphanumeric characters
+    normalized = normalized.replace(/[^A-Z0-9]/g, '')
 
-    // Ensure WH prefix for warehouse barcodes if it looks like one
-    if (/^[A-Z0-9]{10,}$/.test(normalized) && !normalized.startsWith('WH')) {
-      // If it's a long alphanumeric string without WH prefix, it might be missing
-      console.log("[v0] Barcode might be missing WH prefix:", normalized)
+    // Enhanced OCR error correction
+    normalized = normalized
+      .replace(/[O]/g, '0')     // O -> 0
+      .replace(/[I]/g, '1')     // I -> 1
+      .replace(/[L]/g, '1')     // L -> 1
+      .replace(/[S]/g, '5')     // S -> 5
+      .replace(/[Z]/g, '2')     // Z -> 2
+      .replace(/[B]/g, '8')     // B -> 8
+      .replace(/[G]/g, '6')     // G -> 6
+      .replace(/[Q]/g, '0')     // Q -> 0
+      .replace(/[D]/g, '0')     // D -> 0 (sometimes confused with 0)
+
+    console.log("[v0] Normalized barcode:", barcode, "->", normalized)
+    return normalized
+  }
+
+  // Enhanced barcode matching with multiple strategies
+  private async findBarcodeWithStrategies(searchBarcode: string): Promise<any | null> {
+    console.log("[v0] Finding barcode with multiple strategies:", searchBarcode)
+    
+    // Get all items for manual searching
+    const { data: allItems, error } = await supabase
+      .from("warehouse_items")
+      .select("*")
+
+    if (error) {
+      console.error("[v0] Error fetching all items:", error)
+      return null
     }
 
-    return normalized
+    if (!allItems || allItems.length === 0) {
+      console.log("[v0] No items in database")
+      return null
+    }
+
+    console.log("[v0] Searching through", allItems.length, "items")
+
+    const originalSearch = searchBarcode.trim().toUpperCase()
+    const normalizedSearch = this.normalizeBarcode(searchBarcode)
+
+    // Strategy 1: Exact match (case-insensitive)
+    let match = allItems.find(item => {
+      const itemBarcode = (item.barcode || '').trim().toUpperCase()
+      return itemBarcode === originalSearch
+    })
+
+    if (match) {
+      console.log("[v0] Strategy 1 - Exact match found:", match.barcode)
+      return match
+    }
+
+    // Strategy 2: Normalized exact match
+    match = allItems.find(item => {
+      const itemBarcode = this.normalizeBarcode(item.barcode || '')
+      return itemBarcode === normalizedSearch
+    })
+
+    if (match) {
+      console.log("[v0] Strategy 2 - Normalized exact match found:", match.barcode)
+      return match
+    }
+
+    // Strategy 3: Partial match (contains)
+    match = allItems.find(item => {
+      const itemBarcode = (item.barcode || '').trim().toUpperCase()
+      return itemBarcode.includes(originalSearch) || originalSearch.includes(itemBarcode)
+    })
+
+    if (match) {
+      console.log("[v0] Strategy 3 - Partial match found:", match.barcode)
+      return match
+    }
+
+    // Strategy 4: Fuzzy match (allow 1-2 character differences)
+    match = allItems.find(item => {
+      const itemBarcode = (item.barcode || '').trim().toUpperCase()
+      const distance = this.calculateLevenshteinDistance(itemBarcode, originalSearch)
+      return distance <= 2 && Math.abs(itemBarcode.length - originalSearch.length) <= 2
+    })
+
+    if (match) {
+      console.log("[v0] Strategy 4 - Fuzzy match found:", match.barcode, "distance:", this.calculateLevenshteinDistance(match.barcode.toUpperCase(), originalSearch))
+      return match
+    }
+
+    // Strategy 5: Try without WH prefix if present (legacy support)
+    if (originalSearch.startsWith('WH') && originalSearch.length > 2) {
+      const withoutPrefix = originalSearch.substring(2)
+      match = allItems.find(item => {
+        const itemBarcode = (item.barcode || '').trim().toUpperCase()
+        return itemBarcode.includes(withoutPrefix) || itemBarcode.endsWith(withoutPrefix)
+      })
+
+      if (match) {
+        console.log("[v0] Strategy 5 - Match without WH prefix found:", match.barcode)
+        return match
+      }
+    }
+
+    // Strategy 6: Try without DK prefix if present (new format support)
+    if (originalSearch.startsWith('DK') && originalSearch.length > 2) {
+      const withoutPrefix = originalSearch.substring(2)
+      match = allItems.find(item => {
+        const itemBarcode = (item.barcode || '').trim().toUpperCase()
+        return itemBarcode.includes(withoutPrefix) || itemBarcode.endsWith(withoutPrefix)
+      })
+
+      if (match) {
+        console.log("[v0] Strategy 6 - Match without DK prefix found:", match.barcode)
+        return match
+      }
+    }
+
+    // Strategy 7: Try partial match for new DK format (YYMMDD part)
+    if (originalSearch.length >= 6) {
+      const datePattern = originalSearch.substring(originalSearch.startsWith('DK') ? 2 : 0, 6)
+      if (/^\d{6}$/.test(datePattern)) {
+        match = allItems.find(item => {
+          const itemBarcode = (item.barcode || '').trim().toUpperCase()
+          return itemBarcode.includes(datePattern)
+        })
+
+        if (match) {
+          console.log("[v0] Strategy 7 - Date pattern match found:", match.barcode)
+          return match
+        }
+      }
+    }
+
+    console.log("[v0] No match found with any strategy")
+    return null
+  }
+
+  // Calculate Levenshtein distance for fuzzy matching
+  private calculateLevenshteinDistance(str1: string, str2: string): number {
+    const matrix = []
+    const len1 = str1.length
+    const len2 = str2.length
+
+    for (let i = 0; i <= len2; i++) {
+      matrix[i] = [i]
+    }
+
+    for (let j = 0; j <= len1; j++) {
+      matrix[0][j] = j
+    }
+
+    for (let i = 1; i <= len2; i++) {
+      for (let j = 1; j <= len1; j++) {
+        if (str2.charAt(i - 1) === str1.charAt(j - 1)) {
+          matrix[i][j] = matrix[i - 1][j - 1]
+        } else {
+          matrix[i][j] = Math.min(
+            matrix[i - 1][j - 1] + 1, // substitution
+            matrix[i][j - 1] + 1,     // insertion
+            matrix[i - 1][j] + 1      // deletion
+          )
+        }
+      }
+    }
+
+    return matrix[len2][len1]
   }
 
   async getItemsByOrderId(orderId: string): Promise<WarehouseItem[]> {
@@ -256,8 +378,12 @@ class WarehouseRepository {
   async addItem(item: Omit<WarehouseItem, "id" | "barcode"> & { barcode?: string }): Promise<WarehouseItem> {
     console.log("[v0] WarehouseRepository.addItem called with:", item)
     
+    // Generate new TEXT ID using our new format
+    const newId = this.generateBarcode(item.customerName)
+    
     // Map TypeScript types to database fields
     const dbItem = {
+      id: newId, // Use our generated ID instead of letting DB generate UUID
       order_id: item.orderId,
       material: item.material,
       cm: item.cm,
@@ -272,10 +398,13 @@ class WarehouseRepository {
       location: item.location || "Depo", // Provide default value
       supplier: item.supplier,
       notes: item.notes,
-      barcode: item.barcode || this.generateBarcode(),
+      barcode: item.barcode || newId, // Use same ID as barcode for consistency
+      qr_code: null, // Set QR code field
+      code_type: 'qr', // Set code type to QR
+      tags: item.tags || null, // Handle tags field
     }
 
-    console.log("[v0] Mapped database item:", dbItem)
+    console.log("[v0] Mapped database item with new ID:", dbItem)
 
     const { data, error } = await supabase.from("warehouse_items").insert([dbItem]).select().single()
 
@@ -806,7 +935,13 @@ class WarehouseRepository {
     return summary
   }
 
-  private generateBarcode(): string {
+  private generateBarcode(customerName?: string): string {
+    // Use new QR generator format for better ID generation
+    return QRGenerator.generateWarehouseId(customerName)
+  }
+
+  // Legacy barcode generation for backward compatibility
+  private generateLegacyBarcode(): string {
     const timestamp = Date.now().toString()
     const random = Math.random().toString(36).substring(2, 8).toUpperCase()
     return `WH${timestamp.slice(-6)}${random}`

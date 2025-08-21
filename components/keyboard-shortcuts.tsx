@@ -22,6 +22,10 @@ export function KeyboardShortcuts() {
           event.preventDefault()
           router.push("/orders/new")
           break
+        case "q":
+          event.preventDefault()
+          router.push("/qr-scanner")
+          break
         case "b":
           event.preventDefault()
           router.push("/barcode-scanner")
@@ -56,6 +60,12 @@ export function KeyboardShortcuts() {
           if (event.ctrlKey || event.metaKey) {
             event.preventDefault()
             router.push("/analytics")
+          }
+          break
+        case "t":
+          if (event.ctrlKey || event.metaKey) {
+            event.preventDefault()
+            router.push("/printer-test")
           }
           break
       }
