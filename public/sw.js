@@ -71,33 +71,33 @@ self.addEventListener("fetch", (event) => {
   }
 
   event.respondWith(
-    caches.match(request).then((cachedResponse) => {
-      // Return cached version if available
-      if (cachedResponse) {
-        console.log("[SW] Serving from cache:", request.url)
-        return cachedResponse
-      }
-
-      // Otherwise fetch from network
-      return fetch(request)
-        .then((response) => {
-          // Don't cache non-successful responses
-          if (!response || response.status !== 200 || response.type !== "basic") {
-            return response
-          }
-
-          // Clone the response for caching
-          const responseToCache = response.clone()
-
-          caches.open(CACHE_NAME).then((cache) => {
-            console.log("[SW] Caching new resource:", request.url)
-            cache.put(request, responseToCache)
-          })
-
+    // Network first strategy for authenticated routes
+    fetch(request, { redirect: 'follow' })
+      .then((response) => {
+        // Don't cache redirects or non-successful responses
+        if (!response || response.status !== 200 || response.type !== "basic" || response.redirected) {
           return response
+        }
+
+        // Clone the response for caching
+        const responseToCache = response.clone()
+
+        caches.open(CACHE_NAME).then((cache) => {
+          console.log("[SW] Caching new resource:", request.url)
+          cache.put(request, responseToCache)
         })
-        .catch((error) => {
-          console.log("[SW] Network request failed, serving offline page:", error)
+
+        return response
+      })
+      .catch((error) => {
+        console.log("[SW] Network request failed, trying cache:", error)
+        
+        // Try to serve from cache
+        return caches.match(request).then((cachedResponse) => {
+          if (cachedResponse) {
+            console.log("[SW] Serving from cache:", request.url)
+            return cachedResponse
+          }
 
           // For navigation requests, return a basic offline page
           if (request.destination === "document") {
@@ -107,7 +107,7 @@ self.addEventListener("fetch", (event) => {
           // For other requests, just fail
           throw error
         })
-    }),
+      })
   )
 })
 
