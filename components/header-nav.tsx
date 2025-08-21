@@ -1,13 +1,36 @@
 "use client"
 
-import { usePathname } from "next/navigation"
-import { Home, Package, Warehouse, Settings } from "lucide-react"
+import { usePathname, useRouter } from "next/navigation"
+import { Home, Package, Warehouse, Settings, LogOut } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import Image from "next/image"
+import { useState } from "react"
 
 export function HeaderNav() {
   const pathname = usePathname()
+  const router = useRouter()
+  const [isLoggingOut, setIsLoggingOut] = useState(false)
+
+  // Login sayfasında header'ı gösterme
+  if (pathname === '/login') {
+    return null
+  }
+
+  const handleLogout = async () => {
+    setIsLoggingOut(true)
+    try {
+      await fetch('/api/auth/logout', {
+        method: 'POST',
+      })
+      router.push('/login')
+      router.refresh()
+    } catch (error) {
+      console.error('Logout error:', error)
+    } finally {
+      setIsLoggingOut(false)
+    }
+  }
 
   const navItems = [
     {
@@ -80,6 +103,20 @@ export function HeaderNav() {
                 </Button>
               )
             })}
+            
+            {/* Logout Button */}
+            <Button
+              variant="ghost"
+              size="sm"
+              className="flex flex-col items-center gap-0.5 sm:gap-1 h-10 sm:h-12 px-2 sm:px-3 py-1 text-destructive hover:text-destructive"
+              onClick={handleLogout}
+              disabled={isLoggingOut}
+            >
+              <LogOut className="h-3 w-3 sm:h-4 sm:w-4" />
+              <span className="text-[10px] sm:text-xs font-medium leading-tight">
+                {isLoggingOut ? 'Çıkış...' : 'Çıkış'}
+              </span>
+            </Button>
           </div>
         </nav>
       </div>

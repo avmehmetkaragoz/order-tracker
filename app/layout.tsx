@@ -26,7 +26,7 @@ export const metadata: Metadata = {
   authors: [{ name: "v0.app" }],
   creator: "v0.app",
   publisher: "v0.app",
-  robots: "index, follow",
+  robots: "noindex, nofollow, noarchive, nosnippet, noimageindex",
 }
 
 export default function RootLayout({
@@ -50,6 +50,12 @@ html {
         <meta name="mobile-web-app-capable" content="yes" />
         <meta name="msapplication-TileColor" content="#000000" />
         <meta name="msapplication-tap-highlight" content="no" />
+        {/* Güvenlik Meta Tags */}
+        <meta name="robots" content="noindex, nofollow, noarchive, nosnippet, noimageindex" />
+        <meta name="googlebot" content="noindex, nofollow, noarchive, nosnippet, noimageindex" />
+        <meta name="bingbot" content="noindex, nofollow, noarchive, nosnippet, noimageindex" />
+        <meta name="referrer" content="no-referrer" />
+        <meta httpEquiv="X-Robots-Tag" content="noindex, nofollow, noarchive, nosnippet, noimageindex" />
         <link rel="apple-touch-icon" href="/images/company-logo.png" />
         <link rel="icon" type="image/png" href="/images/company-logo.png" />
         <link rel="icon" type="image/svg+xml" href="/images/company-logo.svg" />

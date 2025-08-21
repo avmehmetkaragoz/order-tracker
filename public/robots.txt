@@ -1,0 +1,5 @@
+User-agent: *
+Disallow: /
+
+# Tüm arama motoru botlarını engelle
+# Bu site özel/gizli içerik barındırır
