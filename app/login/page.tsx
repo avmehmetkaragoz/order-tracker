@@ -1,80 +1,65 @@
-'use client'
+"use client"
 
-/**
- * Personnel Login Page
- * 
- * Bu sayfa personel girişi için kullanılır
- * - Multi-user authentication
- * - Legacy admin support (deka_2025)
- * - Modern user login with bcrypt
- */
-
-import { useState, useEffect } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
-import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { LoadingSpinner } from '@/components/loading-spinner'
-import { Eye, EyeOff, Lock, User, AlertCircle, Info, ArrowLeft } from 'lucide-react'
-import { useToast } from '@/hooks/use-toast'
+import { useState, useEffect, Suspense } from "react"
+import { useRouter, useSearchParams } from "next/navigation"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Label } from "@/components/ui/label"
+import { useToast } from "@/hooks/use-toast"
+import { Eye, EyeOff, LogIn, Lock, ArrowLeft, Info } from "lucide-react"
+import { LoadingSpinner } from "@/components/loading-spinner"
+import { ActivityLogger } from "@/lib/activity-logger"
 
 interface LoginState {
   username: string
   password: string
+  showPassword: boolean
   loading: boolean
   error: string | null
-  showPassword: boolean
 }
 
-export default function LoginPage() {
+function LoginContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const { toast } = useToast()
+  
   const [state, setState] = useState<LoginState>({
     username: '',
     password: '',
+    showPassword: false,
     loading: false,
-    error: null,
-    showPassword: false
+    error: null
   })
 
-  // Check if already authenticated
+  // Check if user is already authenticated
   useEffect(() => {
-    checkExistingAuth()
-  }, [])
+    const checkAuth = async () => {
+      try {
+        const response = await fetch('/api/auth/check', {
+          cache: 'no-store',
+          headers: {
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            'Pragma': 'no-cache'
+          }
+        })
+        const data = await response.json()
 
-  const checkExistingAuth = async () => {
-    try {
-      // Check if this is a logout redirect - if so, skip auth check
-      const logout = searchParams.get('logout')
-      if (logout === 'true') {
-        return
-      }
-
-      // Add cache busting and no-cache headers
-      const response = await fetch('/api/auth/check', {
-        cache: 'no-store',
-        headers: {
-          'Cache-Control': 'no-cache, no-store, must-revalidate',
-          'Pragma': 'no-cache'
+        if (data.success && data.user) {
+          // User is already authenticated, redirect to main page
+          router.push('/')
         }
-      })
-      const data = await response.json()
-
-      if (data.success && data.user) {
-        // Already authenticated, redirect to appropriate page
-        const redirect = searchParams.get('redirect') || '/'
-        if (data.isAdmin && !redirect.includes('personnel')) {
-          router.push('/personnel')
-        } else {
-          router.push(redirect)
-        }
+      } catch (error) {
+        // Not authenticated, stay on login page
       }
-    } catch (error) {
-      // Not authenticated, stay on login page
     }
-  }
+
+    // Only check auth if not coming from logout
+    const isLogout = searchParams.get('logout')
+    if (!isLogout) {
+      checkAuth()
+    }
+  }, [router, searchParams])
 
   const handleInputChange = (field: keyof LoginState, value: string | boolean) => {
     setState(prev => ({
@@ -120,6 +105,12 @@ export default function LoginPage() {
           description: `Hoş geldiniz, ${data.user.full_name || data.user.username}!`
         })
         
+        // Log activity
+        ActivityLogger.userLogin({
+          username: state.username,
+          login_type: 'database'
+        })
+        
         // Redirect based on user role or redirect parameter
         const redirect = searchParams.get('redirect') || '/'
         if (data.user.role === 'admin' && !redirect.includes('personnel')) {
@@ -160,69 +151,59 @@ export default function LoginPage() {
             <Lock className="h-8 w-8 text-primary-foreground" />
           </div>
           <div>
-            <h1 className="text-3xl font-bold">Personel Girişi</h1>
-            <p className="text-muted-foreground mt-2">
-              Sipariş Takip - Tedarikçi Sipariş Yönetimi
-            </p>
+            <h1 className="text-3xl font-bold tracking-tight">Hoş Geldiniz</h1>
+            <p className="text-muted-foreground mt-2">Hesabınıza giriş yapın</p>
           </div>
         </div>
 
         {/* Login Form */}
         <Card>
-          <CardHeader>
-            <CardTitle className="text-center">Giriş Yap</CardTitle>
+          <CardHeader className="space-y-1">
+            <CardTitle className="text-2xl text-center">Giriş Yap</CardTitle>
+            <CardDescription className="text-center">
+              Kullanıcı adınız ve şifrenizi girin
+            </CardDescription>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-4">
               {state.error && (
-                <Card className="border-destructive">
-                  <CardContent className="p-4">
-                    <div className="flex items-center gap-2">
-                      <AlertCircle className="h-4 w-4 text-destructive" />
-                      <div className="text-sm text-destructive">
-                        <strong>Giriş Hatası:</strong> {state.error}
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
+                <div className="p-3 text-sm text-destructive bg-destructive/10 border border-destructive/20 rounded-md">
+                  {state.error}
+                </div>
               )}
 
               <div className="space-y-2">
                 <Label htmlFor="username">Kullanıcı Adı</Label>
-                <div className="relative">
-                  <User className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    id="username"
-                    type="text"
-                    placeholder="Kullanıcı adınızı girin"
-                    value={state.username}
-                    onChange={(e) => handleInputChange('username', e.target.value)}
-                    disabled={state.loading}
-                    className="pl-10"
-                    required
-                  />
-                </div>
+                <Input
+                  id="username"
+                  type="text"
+                  placeholder="Kullanıcı adınızı girin"
+                  value={state.username}
+                  onChange={(e) => handleInputChange('username', e.target.value)}
+                  disabled={state.loading}
+                  autoComplete="username"
+                  autoFocus
+                />
               </div>
 
               <div className="space-y-2">
                 <Label htmlFor="password">Şifre</Label>
                 <div className="relative">
-                  <Lock className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
                   <Input
                     id="password"
-                    type={state.showPassword ? 'text' : 'password'}
+                    type={state.showPassword ? "text" : "password"}
                     placeholder="Şifrenizi girin"
                     value={state.password}
                     onChange={(e) => handleInputChange('password', e.target.value)}
                     disabled={state.loading}
-                    className="pl-10 pr-10"
-                    required
+                    autoComplete="current-password"
+                    className="pr-10"
                   />
                   <Button
                     type="button"
                     variant="ghost"
                     size="sm"
-                    className="absolute right-0 top-0 h-full px-3"
+                    className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
                     onClick={() => handleInputChange('showPassword', !state.showPassword)}
                     disabled={state.loading}
                   >
@@ -300,5 +281,27 @@ export default function LoginPage() {
         </div>
       </div>
     </div>
+  )
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-background flex items-center justify-center py-12 px-4">
+        <div className="w-full max-w-md space-y-6">
+          <div className="text-center space-y-4">
+            <div className="mx-auto h-16 w-16 bg-primary rounded-lg flex items-center justify-center">
+              <Lock className="h-8 w-8 text-primary-foreground" />
+            </div>
+            <div>
+              <h1 className="text-3xl font-bold tracking-tight">Yükleniyor...</h1>
+              <p className="text-muted-foreground mt-2">Giriş sayfası hazırlanıyor</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    }>
+      <LoginContent />
+    </Suspense>
   )
 }
