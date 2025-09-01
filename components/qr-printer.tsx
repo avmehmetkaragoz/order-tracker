@@ -61,6 +61,10 @@ export function QRPrinter({
   const handlePrint = async () => {
     setIsGenerating(true)
     try {
+      console.log("Starting QR generation with data:", {
+        id, title, material, specifications, weight, supplier, date, customer, stockType, location, bobinCount: coilCount
+      })
+
       const printableHTML = await QRGenerator.generatePrintableLabel({
         id,
         title,
@@ -75,30 +79,35 @@ export function QRPrinter({
         bobinCount: coilCount,
       })
 
-      // Open print window
-      const printWindow = window.open("", "_blank")
+      console.log("QR generation successful, opening print window")
+
+      // Open print window with better error handling
+      const printWindow = window.open("", "_blank", "width=800,height=600")
       if (printWindow) {
+        printWindow.document.open()
         printWindow.document.write(printableHTML)
         printWindow.document.close()
-        printWindow.focus()
-
-        // Auto-print after a short delay
-        setTimeout(() => {
-          printWindow.print()
-        }, 500)
+        
+        // Wait for content to load before focusing and printing
+        printWindow.onload = () => {
+          printWindow.focus()
+          setTimeout(() => {
+            printWindow.print()
+          }, 1000)
+        }
 
         toast({
           title: "QR Kod Etiketi Hazır",
           description: "Yazdırma penceresi açıldı",
         })
       } else {
-        throw new Error("Popup engellendi")
+        throw new Error("Popup engellendi - lütfen popup blocker'ı devre dışı bırakın")
       }
     } catch (error) {
       console.error("Print error:", error)
       toast({
         title: "Yazdırma Hatası",
-        description: "QR kod yazdırılırken bir hata oluştu",
+        description: error instanceof Error ? error.message : "QR kod yazdırılırken bir hata oluştu",
         variant: "destructive",
       })
     } finally {
