@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Label } from "@/components/ui/label"
 import { useToast } from "@/hooks/use-toast"
+import Image from "next/image"
 import { Eye, EyeOff, LogIn, Lock, ArrowLeft, Info } from "lucide-react"
 import { LoadingSpinner } from "@/components/loading-spinner"
 import { ActivityLogger } from "@/lib/activity-logger"
@@ -147,9 +148,13 @@ function LoginContent() {
       <div className="w-full max-w-md space-y-6">
         {/* Header */}
         <div className="text-center space-y-4">
-          <div className="mx-auto h-16 w-16 bg-primary rounded-lg flex items-center justify-center">
-            <Lock className="h-8 w-8 text-primary-foreground" />
-          </div>
+          <Image
+            src="/images/company-logo.png"
+            alt="Şirket Logosu"
+            width={80}
+            height={80}
+            className="mx-auto"
+          />
           <div>
             <h1 className="text-3xl font-bold tracking-tight">Hoş Geldiniz</h1>
             <p className="text-muted-foreground mt-2">Hesabınıza giriş yapın</p>
@@ -232,50 +237,13 @@ function LoginContent() {
                 )}
               </Button>
 
-              <div className="text-center">
-                <Button
-                  type="button"
-                  variant="link"
-                  onClick={handleForgotPassword}
-                  disabled={state.loading}
-                  className="text-sm"
-                >
-                  Şifremi unuttum
-                </Button>
-              </div>
             </form>
-          </CardContent>
-        </Card>
-
-        {/* Info Card */}
-        <Card className="bg-muted/30">
-          <CardContent className="p-4">
-            <div className="flex items-start gap-3">
-              <Info className="h-5 w-5 text-primary mt-0.5" />
-              <div>
-                <h3 className="text-sm font-medium mb-2">Giriş Bilgileri</h3>
-                <div className="text-sm text-muted-foreground space-y-1">
-                  <p>• Yönetici hesabı: admin / admin123</p>
-                  <p>• Legacy admin: deka_2025 şifresi</p>
-                  <p>• Personel hesapları yönetici tarafından oluşturulur</p>
-                </div>
-              </div>
-            </div>
           </CardContent>
         </Card>
 
         {/* Navigation */}
         <div className="text-center space-y-2">
-          <Button
-            variant="outline"
-            onClick={() => router.push('/')}
-            className="w-full"
-          >
-            <ArrowLeft className="h-4 w-4 mr-2" />
-            Ana sayfaya dön
-          </Button>
-          
-          <p className="text-xs text-muted-foreground">
+          <p className="text-xs text-muted-foreground pt-4">
             © 2025 Deka Plastik - Sipariş Takip Sistemi
           </p>
         </div>
