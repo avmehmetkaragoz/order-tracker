@@ -65,49 +65,154 @@ export function QRPrinter({
         id, title, material, specifications, weight, supplier, date, customer, stockType, location, bobinCount: coilCount
       })
 
+      // Parametreleri kontrol et
+      if (!id || !specifications || !material) {
+        throw new Error("Gerekli bilgiler eksik: ID, malzeme veya özellikler boş")
+      }
+
       const printableHTML = await QRGenerator.generatePrintableLabel({
         id,
         title,
         material,
         specifications,
-        weight,
-        supplier,
-        date,
+        weight: weight || 0,
+        supplier: supplier || "Tedarikçi belirtilmemiş",
+        date: date || new Date().toLocaleDateString('tr-TR'),
         customer,
         stockType,
         location,
         bobinCount: coilCount,
       })
 
-      console.log("QR generation successful, opening print window")
+      console.log("QR generation successful, HTML length:", printableHTML.length)
 
-      // Open print window with better error handling
-      const printWindow = window.open("", "_blank", "width=800,height=600")
+      // Enhanced print window with better content loading detection
+      const printWindow = window.open("", "_blank", "width=800,height=600,scrollbars=yes,resizable=yes")
       if (printWindow) {
+        // Write content to print window
         printWindow.document.open()
         printWindow.document.write(printableHTML)
         printWindow.document.close()
         
-        // Wait for content to load before focusing and printing
-        printWindow.onload = () => {
+        // Enhanced content loading detection
+        const waitForContentLoad = () => {
+          return new Promise<void>((resolve, reject) => {
+            let attempts = 0
+            const maxAttempts = 50 // 5 seconds max wait
+            
+            const checkContent = () => {
+              attempts++
+              
+              try {
+                // Check if document is ready and content is loaded
+                const doc = printWindow.document
+                const isDocumentReady = doc.readyState === 'complete'
+                const hasContent = doc.body && doc.body.innerHTML.length > 100
+                const hasImages = doc.images.length === 0 || Array.from(doc.images).every(img => img.complete)
+                
+                console.log(`Content check attempt ${attempts}:`, {
+                  isDocumentReady,
+                  hasContent,
+                  hasImages,
+                  bodyLength: doc.body?.innerHTML.length || 0,
+                  imageCount: doc.images.length
+                })
+                
+                if (isDocumentReady && hasContent && hasImages) {
+                  console.log("Content fully loaded, proceeding with print")
+                  resolve()
+                } else if (attempts >= maxAttempts) {
+                  console.warn("Content loading timeout, proceeding anyway")
+                  resolve()
+                } else {
+                  setTimeout(checkContent, 100)
+                }
+              } catch (error) {
+                console.error("Error checking content:", error)
+                if (attempts >= maxAttempts) {
+                  reject(new Error("Content loading failed"))
+                } else {
+                  setTimeout(checkContent, 100)
+                }
+              }
+            }
+            
+            // Start checking immediately
+            checkContent()
+          })
+        }
+        
+        // Wait for content to load, then print
+        try {
+          await waitForContentLoad()
+          
+          // Focus and print with enhanced timing
           printWindow.focus()
+          
+          // Give extra time for Zebra ZD220 driver to initialize
           setTimeout(() => {
-            printWindow.print()
-          }, 1000)
+            try {
+              console.log("Initiating print for Zebra ZD220")
+              printWindow.print()
+              
+              // Enhanced cleanup with multiple strategies
+              const cleanup = () => {
+                setTimeout(() => {
+                  try {
+                    if (!printWindow.closed) {
+                      printWindow.close()
+                      console.log("Print window closed successfully")
+                    }
+                  } catch (e) {
+                    console.log("Print window cleanup:", e instanceof Error ? e.message : String(e))
+                  }
+                }, 1000)
+              }
+              
+              // Multiple cleanup triggers
+              if (printWindow.addEventListener) {
+                printWindow.addEventListener('afterprint', cleanup)
+                printWindow.addEventListener('beforeunload', cleanup)
+              }
+              
+              // Fallback cleanup
+              setTimeout(cleanup, 5000)
+              
+            } catch (printError) {
+              console.error("Print execution error:", printError)
+              toast({
+                title: "Yazdırma Hatası",
+                description: "Yazıcı ile iletişim kurulamadı. Zebra ZD220 bağlantısını kontrol edin.",
+                variant: "destructive",
+              })
+            }
+          }, 1500) // Increased delay for Zebra ZD220
+          
+        } catch (loadError) {
+          console.error("Content loading error:", loadError)
+          // Fallback: try to print anyway
+          printWindow.focus()
+          setTimeout(() => printWindow.print(), 1000)
         }
 
         toast({
-          title: "QR Kod Etiketi Hazır",
-          description: "Yazdırma penceresi açıldı",
+          title: "QR Kod Etiketi Hazırlanıyor",
+          description: "Zebra ZD220 için etiket hazırlanıyor, lütfen bekleyin...",
         })
       } else {
-        throw new Error("Popup engellendi - lütfen popup blocker'ı devre dışı bırakın")
+        throw new Error("Popup engellendi - lütfen tarayıcı ayarlarından popup'ları etkinleştirin")
       }
     } catch (error) {
-      console.error("Print error:", error)
+      console.error("Print error details:", {
+        error,
+        stack: error instanceof Error ? error.stack : null,
+        message: error instanceof Error ? error.message : String(error),
+        data: { id, title, material, specifications, weight, supplier, date, customer, stockType, location, coilCount }
+      })
+      
       toast({
         title: "Yazdırma Hatası",
-        description: error instanceof Error ? error.message : "QR kod yazdırılırken bir hata oluştu",
+        description: error instanceof Error ? error.message : "QR kod yazdırılırken bir hata oluştu. Lütfen tekrar deneyin.",
         variant: "destructive",
       })
     } finally {
@@ -133,7 +238,7 @@ export function QRPrinter({
       })
 
       // Open print window
-      const printWindow = window.open("", "_blank")
+      const printWindow = window.open("", "_blank", "width=800,height=600")
       if (printWindow) {
         printWindow.document.write(printableHTML)
         printWindow.document.close()
@@ -142,11 +247,47 @@ export function QRPrinter({
         // Auto-print after a short delay
         setTimeout(() => {
           printWindow.print()
+          
+          // Yazdırma dialog kapatıldıktan sonra pencereyi kapat
+          setTimeout(() => {
+            try {
+              printWindow.close()
+            } catch (e) {
+              console.log("Print window already closed or blocked")
+            }
+          }, 2000) // 2 saniye sonra kapat
         }, 500)
+
+        // Yazdırma dialog için event listener ekle
+        const handleAfterPrint = () => {
+          setTimeout(() => {
+            try {
+              printWindow.close()
+            } catch (e) {
+              console.log("Print window already closed or blocked")
+            }
+          }, 500)
+        }
+
+        // Yazdırma tamamlandığında veya iptal edildiğinde pencereyi kapat
+        printWindow.addEventListener('afterprint', handleAfterPrint)
+        
+        // Focus kaybedildiğinde de pencereyi kapat (kullanıcı başka yere tıklarsa)
+        printWindow.addEventListener('blur', () => {
+          setTimeout(() => {
+            try {
+              if (!printWindow.closed) {
+                printWindow.close()
+              }
+            } catch (e) {
+              console.log("Print window already closed or blocked")
+            }
+          }, 1000)
+        })
 
         toast({
           title: "Bobin QR Etiketleri Hazır",
-          description: `${coilCount} adet bobin QR etiketi yazdırma penceresi açıldı`,
+          description: `${coilCount} adet bobin QR etiketi yazdırma penceresi açıldı, işlem sonrası otomatik kapanacak`,
         })
       } else {
         throw new Error("Popup engellendi")

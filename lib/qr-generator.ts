@@ -106,11 +106,39 @@ export class QRGenerator {
     location?: string
     bobinCount?: number
   }): Promise<string> {
+    // Güvenli specifications parsing
+    let cm = 0;
+    let mikron = 0;
+    
+    try {
+      // Farklı format olasılıklarını kontrol et
+      if (data.specifications) {
+        const specs = data.specifications.toLowerCase();
+        
+        // "100cm x 25μ" formatı
+        const cmMatch = specs.match(/(\d+)\s*cm/);
+        if (cmMatch) {
+          cm = parseInt(cmMatch[1]) || 0;
+        }
+        
+        // "x 25μ" veya "x 25mikron" formatı
+        const mikronMatch = specs.match(/x\s*(\d+)(?:\s*[μµ]|mikron)/);
+        if (mikronMatch) {
+          mikron = parseInt(mikronMatch[1]) || 0;
+        }
+      }
+    } catch (error) {
+      console.warn('Specifications parsing error:', error);
+      // Varsayılan değerler kullan
+      cm = 0;
+      mikron = 0;
+    }
+
     const qrData = this.generateQRData({
       id: data.id,
       material: data.material,
-      cm: parseInt(data.specifications.split('cm')[0]) || 0,
-      mikron: parseInt(data.specifications.split('x ')[1]) || 0,
+      cm: cm,
+      mikron: mikron,
       weight: data.weight,
       supplier: data.supplier,
       date: data.date,
@@ -120,59 +148,364 @@ export class QRGenerator {
       bobinCount: data.bobinCount
     })
 
-    const qrCodeDataURL = await this.generateDataURL(qrData, {
-      width: 300,
-      margin: 1
-    })
+    let qrCodeDataURL;
+    try {
+      qrCodeDataURL = await this.generateDataURL(qrData, {
+        width: 300,
+        margin: 1
+      })
+    } catch (error) {
+      console.error('QR code generation failed:', error);
+      // Fallback: basit QR kod oluştur
+      try {
+        qrCodeDataURL = await this.generateDataURL(data.id, {
+          width: 300,
+          margin: 1
+        })
+      } catch (fallbackError) {
+        console.error('Fallback QR code generation failed:', fallbackError);
+        throw new Error('QR kod oluşturulamadı: ' + (error as Error).message);
+      }
+    }
 
     return `
       <!DOCTYPE html>
       <html>
         <head>
+          <meta charset="UTF-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <meta http-equiv="X-UA-Compatible" content="IE=edge">
+          <meta name="print-color-adjust" content="exact">
+          <meta name="color-scheme" content="light">
           <title>QR Kod Etiketi - ${data.id}</title>
           <style>
+            /* ZEBRA ZD220 ULTRA-AGGRESSIVE PRINT OPTIMIZATION */
             @media print {
+              /* Force Zebra ZD220 100x100mm page size - Multiple format support */
               @page {
-                size: 100mm 100mm;
-                margin: 0;
+                size: 100mm 100mm !important;  /* Primary: exact mm specification */
+                margin: 0 !important;
+                padding: 0 !important;
+                -webkit-print-color-adjust: exact !important;
+                color-adjust: exact !important;
+                print-color-adjust: exact !important;
+                page-break-after: always !important;
               }
-              html, body { 
-                margin: 0; 
-                padding: 0; 
-                width: 100mm;
-                height: 100mm;
-                overflow: hidden;
+              
+              /* Alternative page size declarations for driver compatibility */
+              @page :first {
+                size: 100mm 100mm !important;
+                margin: 0 !important;
               }
-              .no-print { display: none !important; }
-              .label {
+              
+              @page :left {
+                size: 100mm 100mm !important;
+                margin: 0 !important;
+              }
+              
+              @page :right {
+                size: 100mm 100mm !important;
+                margin: 0 !important;
+              }
+              
+              /* Root elements - force exact mm dimensions */
+              html {
+                margin: 0 !important;
+                padding: 0 !important;
                 width: 100mm !important;
                 height: 100mm !important;
+                min-width: 100mm !important;
+                min-height: 100mm !important;
+                max-width: 100mm !important;
+                max-height: 100mm !important;
+                font-size: 12pt !important;
+                background: white !important;
+                overflow: hidden !important;
+                box-sizing: border-box !important;
+              }
+              
+              body {
                 margin: 0 !important;
-                padding: 3mm !important;
+                padding: 0 !important;
+                width: 100mm !important;
+                height: 100mm !important;
+                min-width: 100mm !important;
+                min-height: 100mm !important;
+                max-width: 100mm !important;
+                max-height: 100mm !important;
+                font-family: Arial, Helvetica, sans-serif !important;
+                font-size: 12pt !important;
+                background: white !important;
+                overflow: hidden !important;
+                position: relative !important;
+                box-sizing: border-box !important;
+                display: block !important;
+              }
+              
+              /* Hide preview elements */
+              .no-print, .preview-container {
+                display: none !important;
+                visibility: hidden !important;
+                height: 0 !important;
+                width: 0 !important;
+                opacity: 0 !important;
+              }
+              
+              /* Main label container - EXACT MM SIZE */
+              .label {
+                position: absolute !important;
+                top: 0 !important;
+                left: 0 !important;
+                width: 100mm !important;
+                height: 100mm !important;
+                min-width: 100mm !important;
+                min-height: 100mm !important;
+                max-width: 100mm !important;
+                max-height: 100mm !important;
+                margin: 0 !important;
+                padding: 2mm !important;
                 border: none !important;
-                page-break-after: avoid;
-                box-sizing: border-box;
-                position: absolute;
-                top: 0;
-                left: 0;
+                background: white !important;
+                box-sizing: border-box !important;
+                display: block !important;
+                overflow: hidden !important;
+                page-break-inside: avoid !important;
+                page-break-after: always !important;
+                -webkit-print-color-adjust: exact !important;
+                color-adjust: exact !important;
+                print-color-adjust: exact !important;
+                transform: none !important;
+                zoom: 1 !important;
+              }
+              
+              /* Header section - MM units */
+              .header {
+                width: 100% !important;
+                height: 8mm !important;
+                font-size: 10pt !important;
+                font-weight: bold !important;
+                display: flex !important;
+                align-items: center !important;
+                justify-content: space-between !important;
+                margin-bottom: 1mm !important;
+                border-bottom: 0.5pt solid black !important;
+                padding-bottom: 0.5mm !important;
+                box-sizing: border-box !important;
+              }
+              
+              /* ID Display - MM units */
+              .id-display {
+                width: 100% !important;
+                text-align: center !important;
+                font-family: "Courier New", monospace !important;
+                font-size: 12pt !important;
+                font-weight: bold !important;
+                margin: 2mm 0 !important;
+                padding: 1mm !important;
+                border: 1pt dashed black !important;
+                background: #f8f9fa !important;
+                box-sizing: border-box !important;
+              }
+              
+              /* Main content area - MM Grid layout */
+              .main-content {
+                width: 100% !important;
+                height: 70mm !important;
+                display: grid !important;
+                grid-template-columns: 45mm 45mm !important;
+                gap: 2mm !important;
+                margin: 1mm 0 !important;
+                box-sizing: border-box !important;
+              }
+              
+              /* QR Code section - MM units */
+              .qr-section {
+                width: 45mm !important;
+                height: 45mm !important;
+                display: flex !important;
+                align-items: center !important;
+                justify-content: center !important;
+                box-sizing: border-box !important;
+              }
+              
+              .qr-code {
+                width: 42mm !important;
+                height: 42mm !important;
+                display: block !important;
+                box-sizing: border-box !important;
+              }
+              
+              .qr-code img {
+                width: 42mm !important;
+                height: 42mm !important;
+                max-width: 42mm !important;
+                max-height: 42mm !important;
+                min-width: 42mm !important;
+                min-height: 42mm !important;
+                object-fit: contain !important;
+                border: 0.5pt solid black !important;
+                box-sizing: border-box !important;
+                display: block !important;
+              }
+              
+              /* Info section - MM units */
+              .info-section {
+                width: 45mm !important;
+                height: 45mm !important;
+                display: flex !important;
+                flex-direction: column !important;
+                justify-content: space-between !important;
+                box-sizing: border-box !important;
+              }
+              
+              .specs {
+                font-size: 9pt !important;
+                font-weight: bold !important;
+                text-align: center !important;
+                margin-bottom: 2mm !important;
+                padding: 1mm !important;
+                background: #f0f8ff !important;
+                border: 0.5pt solid black !important;
+                box-sizing: border-box !important;
+              }
+              
+              .info {
+                font-size: 7pt !important;
+                line-height: 1.2 !important;
+                box-sizing: border-box !important;
+              }
+              
+              .info-row {
+                display: flex !important;
+                justify-content: space-between !important;
+                margin-bottom: 0.5mm !important;
+                padding: 0.2mm 0 !important;
+                box-sizing: border-box !important;
+              }
+              
+              .info-label {
+                font-weight: bold !important;
+                font-size: 7pt !important;
+              }
+              
+              .info-value {
+                font-weight: normal !important;
+                font-size: 7pt !important;
+                text-align: right !important;
+              }
+              
+              /* Footer - MM units */
+              .footer {
+                width: 100% !important;
+                height: 10mm !important;
+                margin-top: 1mm !important;
+                padding: 1mm !important;
+                background: #e3f2fd !important;
+                border: 0.5pt solid black !important;
+                text-align: center !important;
+                font-size: 6pt !important;
+                display: flex !important;
+                flex-direction: column !important;
+                justify-content: center !important;
+                box-sizing: border-box !important;
+              }
+              
+              .footer-text {
+                font-size: 6pt !important;
+                font-weight: bold !important;
+                color: black !important;
+              }
+              
+              .footer-subtext {
+                font-size: 5pt !important;
+                color: black !important;
+                margin-top: 0.5mm !important;
+              }
+              
+              /* Force all text to black */
+              * {
+                color: black !important;
+                -webkit-print-color-adjust: exact !important;
+                color-adjust: exact !important;
+                print-color-adjust: exact !important;
               }
             }
             body {
               font-family: Arial, sans-serif;
               margin: 20px;
+              background: #f5f5f5;
+              display: flex;
+              justify-content: center;
+              align-items: center;
+              min-height: 100vh;
+            }
+            
+            /* Preview Container */
+            .preview-container {
               background: white;
+              padding: 20px;
+              border-radius: 8px;
+              box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+              display: flex;
+              flex-direction: column;
+              align-items: center;
+              gap: 20px;
+            }
+            
+            /* Screen Preview Styles - Zebra ZD220 Compatible */
+            @media screen {
+              .label {
+                box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+                border: 2px solid #333;
+                border-radius: 2px;
+                background: white;
+                position: relative;
+                display: flex;
+                flex-direction: column;
+                overflow: visible;
+                margin: 10px auto;
+              }
+              
+              /* Preview için boyutları daha esnek tut */
+              .label * {
+                max-width: 100%;
+                overflow: visible;
+              }
+              
+              .qr-code img {
+                max-width: 100%;
+                height: auto;
+                object-fit: contain;
+              }
+              
+              /* Preview'da content overflow'a izin ver */
+              .header, .main-content, .footer {
+                overflow: visible;
+              }
+            }
+            
+            /* Print Preview Compatibility */
+            @media screen and (min-resolution: 150dpi) {
+              .label {
+                border: 1px solid #999;
+                transform: scale(0.8);
+                transform-origin: center;
+              }
             }
             .label {
               width: 10cm;
               height: 10cm;
-              border: 2px solid #000;
-              padding: 0.3cm;
-              margin: 10px auto;
+              border: 2px solid #333;
+              padding: 2.5mm;
+              margin: 0;
               background: white;
               box-sizing: border-box;
               display: flex;
               flex-direction: column;
               page-break-after: always;
+              position: relative;
+              overflow: hidden;
+              border-radius: 2px;
             }
             .header {
               display: flex;
@@ -337,7 +670,22 @@ export class QRGenerator {
           </style>
         </head>
         <body>
-          <button class="print-button no-print" onclick="window.print()">🖨️ Yazdır (10cm x 10cm)</button>
+          <div class="preview-container no-print">
+            <div style="text-align: center; margin-bottom: 10px;">
+              <h3 style="margin: 0; color: #333;">Zebra ZD220 - QR Kod Etiketi Önizleme</h3>
+              <p style="margin: 5px 0; color: #666; font-size: 14px;">100mm x 100mm etiket boyutu</p>
+            </div>
+            
+            <button class="print-button" onclick="window.print()" style="margin-bottom: 15px;">
+              🖨️ Zebra ZD220'ye Yazdır
+            </button>
+            
+            <div style="border: 2px dashed #ccc; padding: 10px; border-radius: 4px;">
+              <p style="margin: 0; font-size: 12px; color: #888; text-align: center;">
+                ↓ Bu alan tam 100mm x 100mm boyutunda yazdırılacak ↓
+              </p>
+            </div>
+          </div>
           
           <div class="label">
             <div class="header">
@@ -424,36 +772,193 @@ export class QRGenerator {
       <!DOCTYPE html>
       <html>
         <head>
+          <meta charset="UTF-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <meta http-equiv="X-UA-Compatible" content="IE=edge">
+          <meta name="print-color-adjust" content="exact">
+          <meta name="color-scheme" content="light">
           <title>Bobin QR Kod Etiketleri - ${data.parentId}</title>
           <style>
+            /* ZEBRA ZD220 COIL LABELS - AGGRESSIVE OPTIMIZATION */
             @media print {
               @page {
-                size: 100mm 100mm;
-                margin: 0;
-              }
-              html, body { 
-                margin: 0; 
-                padding: 0; 
-                width: 100mm;
-                height: 100mm;
-                overflow: hidden;
-              }
-              .no-print { display: none !important; }
-              .label {
-                width: 100mm !important;
-                height: 100mm !important;
+                size: 4in 4in;
                 margin: 0 !important;
-                padding: 3mm !important;
+                -webkit-print-color-adjust: exact;
+                color-adjust: exact;
+              }
+              
+              html, body {
+                margin: 0 !important;
+                padding: 0 !important;
+                width: 4in !important;
+                height: 4in !important;
+                font-size: 16px !important;
+                background: white !important;
+                overflow: hidden !important;
+              }
+              
+              .no-print, .preview-container {
+                display: none !important;
+                visibility: hidden !important;
+                height: 0 !important;
+                width: 0 !important;
+              }
+              
+              .label {
+                position: absolute !important;
+                top: 0 !important;
+                left: 0 !important;
+                width: 4in !important;
+                height: 4in !important;
+                margin: 0 !important;
+                padding: 0.1in !important;
                 border: none !important;
-                page-break-after: avoid;
-                box-sizing: border-box;
-                position: relative;
+                background: white !important;
+                box-sizing: border-box !important;
+                page-break-after: always !important;
+                overflow: visible !important;
+              }
+              
+              .header {
+                width: 100% !important;
+                height: 0.25in !important;
+                font-size: 10pt !important;
+                margin-bottom: 0.05in !important;
+                border-bottom: 1px solid black !important;
+              }
+              
+              .coil-number {
+                width: 100% !important;
+                height: 0.3in !important;
+                font-size: 12pt !important;
+                font-weight: bold !important;
+                text-align: center !important;
+                background: #007bff !important;
+                color: white !important;
+                margin-bottom: 0.05in !important;
+                display: flex !important;
+                align-items: center !important;
+                justify-content: center !important;
+              }
+              
+              .id-display {
+                width: 100% !important;
+                text-align: center !important;
+                font-family: monospace !important;
+                font-size: 12pt !important;
+                font-weight: bold !important;
+                margin: 0.05in 0 !important;
+                padding: 0.03in !important;
+                border: 1px dashed black !important;
+              }
+              
+              .qr-section {
+                width: 100% !important;
+                height: 2in !important;
+                display: flex !important;
+                justify-content: center !important;
+                align-items: center !important;
+                margin: 0.1in 0 !important;
+              }
+              
+              .qr-code {
+                width: 1.8in !important;
+                height: 1.8in !important;
+              }
+              
+              .qr-code img {
+                width: 1.8in !important;
+                height: 1.8in !important;
+                object-fit: contain !important;
+                border: 1px solid black !important;
+              }
+              
+              .specs {
+                width: 100% !important;
+                font-size: 10pt !important;
+                font-weight: bold !important;
+                text-align: center !important;
+                margin: 0.05in 0 !important;
+                padding: 0.03in !important;
+                background: #f0f8ff !important;
+                border: 1px solid black !important;
+              }
+              
+              .info {
+                width: 100% !important;
+                font-size: 8pt !important;
+                line-height: 1.2 !important;
+                margin: 0.05in 0 !important;
+              }
+              
+              .info-row {
+                display: flex !important;
+                justify-content: space-between !important;
+                margin-bottom: 0.02in !important;
+              }
+              
+              .info-label {
+                font-weight: bold !important;
+                font-size: 8pt !important;
+              }
+              
+              .info-value {
+                font-size: 8pt !important;
+                text-align: right !important;
+              }
+              
+              .footer {
+                width: 100% !important;
+                height: 0.3in !important;
+                margin-top: auto !important;
+                padding: 0.02in !important;
+                background: #e3f2fd !important;
+                border: 1px solid black !important;
+                text-align: center !important;
+                font-size: 7pt !important;
+                display: flex !important;
+                align-items: center !important;
+                justify-content: center !important;
+              }
+              
+              * {
+                color: black !important;
+                -webkit-print-color-adjust: exact !important;
+                color-adjust: exact !important;
               }
             }
             body {
               font-family: Arial, sans-serif;
               margin: 20px;
+              background: #f5f5f5;
+              display: flex;
+              justify-content: center;
+              align-items: flex-start;
+              min-height: 100vh;
+              flex-direction: column;
+              gap: 20px;
+            }
+            
+            /* Preview Container for Coils */
+            .preview-container {
               background: white;
+              padding: 20px;
+              border-radius: 8px;
+              box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+              text-align: center;
+              margin-bottom: 20px;
+              width: 100%;
+              box-sizing: border-box;
+            }
+            
+            /* Screen Preview Styles for Coils */
+            @media screen {
+              .label {
+                box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+                border: 1px solid #ddd;
+                margin-bottom: 20px;
+              }
             }
             .label {
               width: 10cm;
@@ -621,17 +1126,62 @@ export class QRGenerator {
           </style>
         </head>
         <body>
-          <button class="print-button no-print" onclick="window.print()">🖨️ Tüm Bobin QR Etiketlerini Yazdır (10cm x 10cm)</button>
-    `
+          <div class="preview-container no-print">
+            <div style="text-align: center; margin-bottom: 15px;">
+              <h3 style="margin: 0; color: #333;">Zebra ZD220 - Bobin QR Etiketleri Önizleme</h3>
+              <p style="margin: 5px 0; color: #666; font-size: 14px;">${data.coilCount} adet × 100mm x 100mm etiket</p>
+            </div>
+            
+            <button class="print-button" onclick="window.print()" style="margin-bottom: 15px;">
+              🖨️ ${data.coilCount} Adet Bobin Etiketi Zebra ZD220'ye Yazdır
+            </button>
+            
+            <div style="border: 2px dashed #ccc; padding: 10px; border-radius: 4px; background: #f9f9f9;">
+              <p style="margin: 0; font-size: 12px; color: #888; text-align: center;">
+                ↓ Her etiket ayrı sayfa olarak 100mm x 100mm boyutunda yazdırılacak ↓
+              </p>
+              <p style="margin: 5px 0 0 0; font-size: 11px; color: #666; text-align: center;">
+                Zebra ZD220 yazıcınızda her etiket için ayrı kağıt kullanılacak
+              </p>
+            </div>
+          </div>
+     `
 
     // Generate a label for each coil
     for (let i = 0; i < data.coilCount; i++) {
       const coilId = this.generateCoilQRCode(data.parentId, i)
+      
+      // Güvenli specifications parsing
+      let cm = 0;
+      let mikron = 0;
+      
+      try {
+        if (data.specifications) {
+          const specs = data.specifications.toLowerCase();
+          
+          // "100cm x 25μ" formatı
+          const cmMatch = specs.match(/(\d+)\s*cm/);
+          if (cmMatch) {
+            cm = parseInt(cmMatch[1]) || 0;
+          }
+          
+          // "x 25μ" veya "x 25mikron" formatı
+          const mikronMatch = specs.match(/x\s*(\d+)(?:\s*[μµ]|mikron)/);
+          if (mikronMatch) {
+            mikron = parseInt(mikronMatch[1]) || 0;
+          }
+        }
+      } catch (error) {
+        console.warn('Coil specifications parsing error:', error);
+        cm = 0;
+        mikron = 0;
+      }
+      
       const coilQRData = this.generateQRData({
         id: coilId,
         material: data.material,
-        cm: parseInt(data.specifications.split('cm')[0]) || 0,
-        mikron: parseInt(data.specifications.split('x ')[1]) || 0,
+        cm: cm,
+        mikron: mikron,
         weight: weightPerCoil,
         supplier: data.supplier,
         date: data.date,
@@ -641,10 +1191,25 @@ export class QRGenerator {
         bobinCount: 1
       })
 
-      const qrCodeDataURL = await this.generateDataURL(coilQRData, {
-        width: 200,
-        margin: 2
-      })
+      let qrCodeDataURL;
+      try {
+        qrCodeDataURL = await this.generateDataURL(coilQRData, {
+          width: 200,
+          margin: 2
+        })
+      } catch (error) {
+        console.error(`Coil ${i + 1} QR code generation failed:`, error);
+        // Fallback: basit QR kod oluştur
+        try {
+          qrCodeDataURL = await this.generateDataURL(coilId, {
+            width: 200,
+            margin: 2
+          })
+        } catch (fallbackError) {
+          console.error(`Coil ${i + 1} fallback QR code generation failed:`, fallbackError);
+          throw new Error(`Bobin ${i + 1} QR kod oluşturulamadı`);
+        }
+      }
 
       labelsHTML += `
         <div class="label">
@@ -729,17 +1294,215 @@ export class QRGenerator {
       <!DOCTYPE html>
       <html>
         <head>
+          <meta charset="UTF-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <meta http-equiv="X-UA-Compatible" content="IE=edge">
+          <meta name="print-color-adjust" content="exact">
+          <meta name="color-scheme" content="light">
           <title>Dönüş QR Kod Etiketleri - ${data.parentQRCode}</title>
           <style>
+            /* ZEBRA ZD220 RETURN LABELS - AGGRESSIVE OPTIMIZATION */
             @media print {
-              body { margin: 0; padding: 0; }
-              .no-print { display: none; }
-              .label {
-                width: 10cm !important;
-                height: 10cm !important;
+              @page {
+                size: 4in 4in;
                 margin: 0 !important;
+                -webkit-print-color-adjust: exact;
+                color-adjust: exact;
+              }
+              
+              html, body {
+                margin: 0 !important;
+                padding: 0 !important;
+                width: 4in !important;
+                height: 4in !important;
+                font-size: 16px !important;
+                background: white !important;
+                overflow: hidden !important;
+              }
+              
+              .no-print, .preview-container {
+                display: none !important;
+                visibility: hidden !important;
+                height: 0 !important;
+                width: 0 !important;
+              }
+              
+              .label {
+                position: absolute !important;
+                top: 0 !important;
+                left: 0 !important;
+                width: 4in !important;
+                height: 4in !important;
+                margin: 0 !important;
+                padding: 0.1in !important;
                 border: none !important;
-                page-break-after: always;
+                background: white !important;
+                box-sizing: border-box !important;
+                page-break-after: always !important;
+                overflow: visible !important;
+              }
+              
+              .header {
+                width: 100% !important;
+                height: 0.25in !important;
+                font-size: 10pt !important;
+                margin-bottom: 0.05in !important;
+                border-bottom: 1px solid #ff6b35 !important;
+              }
+              
+              .return-badge {
+                width: 100% !important;
+                height: 0.3in !important;
+                font-size: 12pt !important;
+                font-weight: bold !important;
+                text-align: center !important;
+                background: #ff6b35 !important;
+                color: white !important;
+                margin-bottom: 0.05in !important;
+                display: flex !important;
+                align-items: center !important;
+                justify-content: center !important;
+              }
+              
+              .id-display {
+                width: 100% !important;
+                text-align: center !important;
+                font-family: monospace !important;
+                font-size: 12pt !important;
+                font-weight: bold !important;
+                margin: 0.05in 0 !important;
+                padding: 0.03in !important;
+                border: 1px dashed #ff6b35 !important;
+                background: #fff5f0 !important;
+              }
+              
+              .main-content {
+                width: 100% !important;
+                height: 2.5in !important;
+                display: grid !important;
+                grid-template-columns: 1.8in 1.8in !important;
+                gap: 0.1in !important;
+                margin: 0.05in 0 !important;
+              }
+              
+              .qr-section {
+                width: 1.8in !important;
+                height: 1.8in !important;
+                display: flex !important;
+                align-items: center !important;
+                justify-content: center !important;
+              }
+              
+              .qr-code {
+                width: 1.6in !important;
+                height: 1.6in !important;
+              }
+              
+              .qr-code img {
+                width: 1.6in !important;
+                height: 1.6in !important;
+                object-fit: contain !important;
+                border: 1px solid black !important;
+              }
+              
+              .info-section {
+                width: 1.8in !important;
+                height: 1.8in !important;
+                display: flex !important;
+                flex-direction: column !important;
+                justify-content: space-between !important;
+              }
+              
+              .specs {
+                width: 100% !important;
+                font-size: 10pt !important;
+                font-weight: bold !important;
+                text-align: center !important;
+                margin-bottom: 0.05in !important;
+                padding: 0.03in !important;
+                background: #fff5f0 !important;
+                border: 1px solid #ff6b35 !important;
+              }
+              
+              .condition {
+                width: 100% !important;
+                font-size: 9pt !important;
+                font-weight: bold !important;
+                text-align: center !important;
+                margin-bottom: 0.05in !important;
+                padding: 0.03in !important;
+                border-radius: 3px !important;
+              }
+              
+              .condition.kullanilabilir {
+                background: #d4edda !important;
+                color: #155724 !important;
+                border: 1px solid #c3e6cb !important;
+              }
+              
+              .condition.hasarli {
+                background: #f8d7da !important;
+                color: #721c24 !important;
+                border: 1px solid #f5c6cb !important;
+              }
+              
+              .condition.kontrol-gerekli {
+                background: #fff3cd !important;
+                color: #856404 !important;
+                border: 1px solid #ffeaa7 !important;
+              }
+              
+              .info {
+                width: 100% !important;
+                font-size: 8pt !important;
+                line-height: 1.2 !important;
+                flex: 1 !important;
+              }
+              
+              .info-row {
+                display: flex !important;
+                justify-content: space-between !important;
+                margin-bottom: 0.02in !important;
+              }
+              
+              .info-label {
+                font-weight: bold !important;
+                font-size: 8pt !important;
+              }
+              
+              .info-value {
+                font-size: 8pt !important;
+                text-align: right !important;
+              }
+              
+              .footer {
+                width: 100% !important;
+                height: 0.3in !important;
+                margin-top: 0.05in !important;
+                padding: 0.02in !important;
+                background: #fff5f0 !important;
+                border: 1px solid #ff6b35 !important;
+                text-align: center !important;
+                font-size: 7pt !important;
+                display: flex !important;
+                align-items: center !important;
+                justify-content: center !important;
+              }
+              
+              .footer-text {
+                color: #ff6b35 !important;
+                font-weight: bold !important;
+              }
+              
+              * {
+                color: black !important;
+                -webkit-print-color-adjust: exact !important;
+                color-adjust: exact !important;
+              }
+              
+              /* Return-specific color overrides */
+              .company-text, .header-text {
+                color: #ff6b35 !important;
               }
             }
             body {
@@ -942,16 +1705,68 @@ export class QRGenerator {
           </style>
         </head>
         <body>
-          <button class="print-button no-print" onclick="window.print()">🖨️ Tüm Dönüş QR Etiketlerini Yazdır (10cm x 10cm)</button>
-    `
+          <div class="preview-container no-print">
+            <div style="text-align: center; margin-bottom: 15px;">
+              <h3 style="margin: 0; color: #ff6b35;">Zebra ZD220 - Dönüş QR Etiketleri Önizleme</h3>
+              <p style="margin: 5px 0; color: #666; font-size: 14px;">${data.returnQRCodes.length} adet × 100mm x 100mm dönüş etiketi</p>
+            </div>
+            
+            <button class="print-button" onclick="window.print()" style="margin-bottom: 15px; background: #ff6b35;">
+              🖨️ ${data.returnQRCodes.length} Adet Dönüş Etiketi Zebra ZD220'ye Yazdır
+            </button>
+            
+            <div style="border: 2px dashed #ff6b35; padding: 10px; border-radius: 4px; background: #fff5f0;">
+              <p style="margin: 0; font-size: 12px; color: #ff6b35; text-align: center;">
+                ↓ Her dönüş etiketi ayrı sayfa olarak 100mm x 100mm boyutunda yazdırılacak ↓
+              </p>
+              <p style="margin: 5px 0 0 0; font-size: 11px; color: #666; text-align: center;">
+                Dönüş ürünleri için özel turuncu renk kodlaması
+              </p>
+            </div>
+          </div>
+     `
 
     // Generate a label for each return QR code
     for (const returnQR of data.returnQRCodes) {
+      // Güvenli specifications parsing
+      let cm = 0;
+      let mikron = 0;
+      let material = 'OPP';
+      
+      try {
+        if (data.specifications) {
+          const specs = data.specifications.toLowerCase();
+          
+          // Material extraction - ilk split ile dene, yoksa default
+          const parts = data.specifications.split(' • ');
+          if (parts.length >= 3) {
+            material = parts[2] || 'OPP';
+          }
+          
+          // "100cm x 25μ" formatı
+          const cmMatch = specs.match(/(\d+)\s*cm/);
+          if (cmMatch) {
+            cm = parseInt(cmMatch[1]) || 0;
+          }
+          
+          // "x 25μ" veya "x 25mikron" formatı
+          const mikronMatch = specs.match(/x\s*(\d+)(?:\s*[μµ]|mikron)/);
+          if (mikronMatch) {
+            mikron = parseInt(mikronMatch[1]) || 0;
+          }
+        }
+      } catch (error) {
+        console.warn('Return specifications parsing error:', error);
+        cm = 0;
+        mikron = 0;
+        material = 'OPP';
+      }
+      
       const returnQRData = this.generateQRData({
         id: returnQR.qrCode,
-        material: data.specifications.split(' • ')[2] || 'OPP',
-        cm: parseInt(data.specifications.split('cm')[0]) || 0,
-        mikron: parseInt(data.specifications.split('x ')[1]) || 0,
+        material: material,
+        cm: cm,
+        mikron: mikron,
         weight: returnQR.weight,
         supplier: data.supplier,
         date: returnQR.date,
@@ -961,10 +1776,25 @@ export class QRGenerator {
         bobinCount: 1
       })
 
-      const qrCodeDataURL = await this.generateDataURL(returnQRData, {
-        width: 200,
-        margin: 2
-      })
+      let qrCodeDataURL;
+      try {
+        qrCodeDataURL = await this.generateDataURL(returnQRData, {
+          width: 200,
+          margin: 2
+        })
+      } catch (error) {
+        console.error(`Return QR code generation failed for ${returnQR.qrCode}:`, error);
+        // Fallback: basit QR kod oluştur
+        try {
+          qrCodeDataURL = await this.generateDataURL(returnQR.qrCode, {
+            width: 200,
+            margin: 2
+          })
+        } catch (fallbackError) {
+          console.error(`Return fallback QR code generation failed for ${returnQR.qrCode}:`, fallbackError);
+          throw new Error(`Dönüş QR kod oluşturulamadı: ${returnQR.qrCode}`);
+        }
+      }
 
       const conditionClass = returnQR.condition.toLowerCase().replace(/\s+/g, '-')
 
