@@ -132,14 +132,29 @@ export class QRGenerator {
           <title>QR Kod Etiketi - ${data.id}</title>
           <style>
             @media print {
-              body { margin: 0; padding: 0; }
-              .no-print { display: none; }
+              @page {
+                size: 100mm 100mm;
+                margin: 0;
+              }
+              html, body { 
+                margin: 0; 
+                padding: 0; 
+                width: 100mm;
+                height: 100mm;
+                overflow: hidden;
+              }
+              .no-print { display: none !important; }
               .label {
-                width: 10cm !important;
-                height: 10cm !important;
+                width: 100mm !important;
+                height: 100mm !important;
                 margin: 0 !important;
+                padding: 3mm !important;
                 border: none !important;
-                page-break-after: always;
+                page-break-after: avoid;
+                box-sizing: border-box;
+                position: absolute;
+                top: 0;
+                left: 0;
               }
             }
             body {
@@ -412,14 +427,27 @@ export class QRGenerator {
           <title>Bobin QR Kod Etiketleri - ${data.parentId}</title>
           <style>
             @media print {
-              body { margin: 0; padding: 0; }
-              .no-print { display: none; }
+              @page {
+                size: 100mm 100mm;
+                margin: 0;
+              }
+              html, body { 
+                margin: 0; 
+                padding: 0; 
+                width: 100mm;
+                height: 100mm;
+                overflow: hidden;
+              }
+              .no-print { display: none !important; }
               .label {
-                width: 10cm !important;
-                height: 10cm !important;
+                width: 100mm !important;
+                height: 100mm !important;
                 margin: 0 !important;
+                padding: 3mm !important;
                 border: none !important;
-                page-break-after: always;
+                page-break-after: avoid;
+                box-sizing: border-box;
+                position: relative;
               }
             }
             body {
