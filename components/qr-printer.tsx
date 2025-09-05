@@ -402,8 +402,8 @@ export function QRPrinter({
     setSelectedCoils(new Set())
   }
 
-  // Seçili bobinler için QZ Tray yazdırma
-  const handleQzPrintSelectedCoils = async () => {
+  // Seçili bobinler için PrintNode yazdırma
+  const handlePrintSelectedCoils = async () => {
     if (selectedCoils.size === 0) {
       toast({
         title: "Seçim Hatası",
@@ -443,19 +443,22 @@ export function QRPrinter({
           `${coilId}\n${specifications}\n${coilWeight}kg\n${supplier}\n${customer || ''}\n1 Bobin`
         )
 
-        // QZ Tray ile yazdır
-        await new Promise<void>((resolve, reject) => {
-          const printWithQz = async () => {
-            try {
-              const { printWithQz: qzPrint } = await import('@/lib/qz-connection')
-              await qzPrint(zplData)
-              resolve()
-            } catch (error) {
-              reject(error)
-            }
-          }
-          printWithQz()
+        // PrintNode ile yazdır
+        const response = await fetch('/api/print', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            zplData,
+            title: `Bobin Etiket - ${coilId}`,
+          }),
         })
+
+        if (!response.ok) {
+          const errorData = await response.json()
+          throw new Error(errorData.error || `Bobin ${coilNumber} yazdırılamadı`)
+        }
 
         // Bobinler arası kısa bekleme
         if (coilNumber !== selectedCoilsArray[selectedCoilsArray.length - 1]) {
@@ -464,14 +467,14 @@ export function QRPrinter({
       }
 
       toast({
-        title: "QZ Bobin Yazdırma Başarılı ✅",
-        description: `${selectedCoils.size} adet seçili bobin etiketi QZ Tray ile yazdırıldı!`,
+        title: "Bobin Yazdırma Başarılı ✅",
+        description: `${selectedCoils.size} adet seçili bobin etiketi başarıyla yazıcıya gönderildi!`,
       })
 
     } catch (error) {
-      console.error("QZ Coil print error:", error)
+      console.error("Coil print error:", error)
       toast({
-        title: "QZ Bobin Yazdırma Hatası ❌",
+        title: "Bobin Yazdırma Hatası ❌",
         description: error instanceof Error ? error.message : "Bobin etiketleri yazdırılırken hata oluştu",
         variant: "destructive",
       })
@@ -798,7 +801,7 @@ export function QRPrinter({
               <div className="flex justify-center">
                 {/* QZ Tray Yazdırma - Seçimli */}
                 <Button 
-                  onClick={handleQzPrintSelectedCoils} 
+                  onClick={handlePrintSelectedCoils} 
                   disabled={isGenerating || selectedCoils.size === 0}
                   className="w-full"
                   size="sm"
