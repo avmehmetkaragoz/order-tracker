@@ -223,27 +223,67 @@ export function ReturnBarcodePrinter({
         <div className="bg-white dark:bg-orange-900/30 p-4 rounded-lg border border-orange-200 dark:border-orange-700">
           <div className="text-center mb-3">
             <Badge variant="secondary" className="mb-2 bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200">
-              {totalReturnedCoils} ADET DÖNÜŞ ETİKETİ
+              DÖNÜŞ ETİKETİ - QR KOD (10x10cm)
             </Badge>
           </div>
 
-          <div className="text-sm text-center mb-3">
-            <div className="font-medium text-orange-900 dark:text-orange-100">{specifications}</div>
-            <div className="text-orange-700 dark:text-orange-300">Depoya dönen bobinler için özel etiketler</div>
+          {/* Ana Layout: Sol tarafta bilgiler, sağ tarafta QR kod */}
+          <div className="flex items-start gap-4 mb-3">
+            {/* Sol taraf: ID ve bilgiler */}
+            <div className="flex-1">
+              {/* ID - En üstte büyük */}
+              <div className="mb-3">
+                <div className="font-mono text-xl font-bold text-orange-800 dark:text-orange-200 bg-orange-100 dark:bg-orange-900/50 px-3 py-2 rounded border-dashed border-2 border-orange-300 dark:border-orange-700">
+                  {parentBarcode}-R01
+                </div>
+              </div>
+
+              {/* Özellikler */}
+              <div className="mb-3">
+                <div className="font-medium text-sm bg-orange-50 dark:bg-orange-900/30 px-3 py-1 rounded border border-orange-200 dark:border-orange-700">{specifications}</div>
+              </div>
+
+              {/* Diğer bilgiler */}
+              <div className="text-xs space-y-1 text-orange-700 dark:text-orange-300">
+                <div className="flex justify-between">
+                  <span>Toplam Dönüş:</span>
+                  <span className="font-medium">{totalReturnWeight.toFixed(1)} kg</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Etiket Sayısı:</span>
+                  <span className="font-medium">{totalReturnedCoils} adet</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Durum:</span>
+                  <span className="font-medium">Dönüş</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Sağ taraf: QR kod - Diğer etiketlerle aynı boyut */}
+            <div className="flex-shrink-0">
+              <QRDisplay 
+                data={`${parentBarcode}-R01`} 
+                width={120} 
+                className="border border-orange-200 dark:border-orange-700 rounded" 
+              />
+            </div>
           </div>
 
+          {/* Ayırıcı çizgi - QR koda değmeyecek şekilde, diğer etiketlerle aynı uzunluk */}
+          <div className="mb-3">
+            <div className="w-3/5 h-px bg-orange-300 dark:bg-orange-700 border-t border-dashed"></div>
+          </div>
+
+          {/* Alt bilgiler */}
           <div className="text-xs space-y-1 text-orange-700 dark:text-orange-300">
-            <div className="flex justify-between">
-              <span>Toplam Dönüş Ağırlığı:</span>
-              <span className="font-medium">{totalReturnWeight.toFixed(1)} kg</span>
-            </div>
-            <div className="flex justify-between">
-              <span>Dönüş Sayısı:</span>
-              <span className="font-medium">{totalReturnedCoils} adet</span>
-            </div>
             <div className="flex justify-between">
               <span>QR Kod Formatı:</span>
               <span className="font-mono">{parentBarcode}-R01, R02...</span>
+            </div>
+            <div className="flex justify-between">
+              <span>Tip:</span>
+              <span>Dönüş Etiketi</span>
             </div>
           </div>
 
