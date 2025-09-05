@@ -74,16 +74,17 @@ export class QRGenerator {
         dark?: string
         light?: string
       }
+      errorCorrectionLevel?: 'L' | 'M' | 'Q' | 'H'
     } = {}
   ): Promise<string> {
-    const { width = 200, margin = 4, color = { dark: '#000000', light: '#FFFFFF' } } = options
+    const { width = 200, margin = 4, color = { dark: '#000000', light: '#FFFFFF' }, errorCorrectionLevel = 'M' } = options
 
     try {
       const dataURL = await QRCode.toDataURL(data, {
         width,
         margin,
         color,
-        errorCorrectionLevel: 'M'
+        errorCorrectionLevel
       })
       return dataURL
     } catch (error) {
@@ -92,7 +93,7 @@ export class QRGenerator {
     }
   }
 
-  // Generate printable QR label HTML
+  // Generate printable QR label HTML with DEBUG BORDERS
   static async generatePrintableLabel(data: {
     id: string
     title: string
@@ -151,16 +152,17 @@ export class QRGenerator {
     let qrCodeDataURL;
     try {
       qrCodeDataURL = await this.generateDataURL(qrData, {
-        width: 300,
-        margin: 1
+        width: 1200,  // 300dpi için yüksek çözünürlük
+        margin: 4,    // Daha iyi kenar boşluğu
+        errorCorrectionLevel: 'H'  // Maximum error correction for crisp printing
       })
     } catch (error) {
       console.error('QR code generation failed:', error);
       // Fallback: basit QR kod oluştur
       try {
         qrCodeDataURL = await this.generateDataURL(data.id, {
-          width: 300,
-          margin: 1
+          width: 1200,
+          margin: 4
         })
       } catch (fallbackError) {
         console.error('Fallback QR code generation failed:', fallbackError);
@@ -179,21 +181,198 @@ export class QRGenerator {
           <meta name="color-scheme" content="light">
           <title>QR Kod Etiketi - ${data.id}</title>
           <style>
-            /* ZEBRA ZD220 ULTRA-AGGRESSIVE PRINT OPTIMIZATION */
+            /* UNIVERSAL 10x10CM LABEL OPTIMIZATION - Works with any printer */
             @media print {
-              /* Force Zebra ZD220 100x100mm page size - Multiple format support */
+              /* Simple, universal page size */
               @page {
-                size: 100mm 100mm !important;  /* Primary: exact mm specification */
-                margin: 0 !important;
-                padding: 0 !important;
+                size: 10cm 10cm !important;
+                margin: 0mm !important;
+                padding: 0mm !important;
                 -webkit-print-color-adjust: exact !important;
                 color-adjust: exact !important;
-                print-color-adjust: exact !important;
-                page-break-after: always !important;
               }
               
-              /* Alternative page size declarations for driver compatibility */
-              @page :first {
+              /* Root elements */
+              html, body {
+                margin: 0mm !important;
+                padding: 0mm !important;
+                width: 10cm !important;
+                height: 10cm !important;
+                font-family: Arial, sans-serif !important;
+                font-size: 12pt !important;
+                background: white !important;
+                overflow: hidden !important;
+              }
+              
+              /* Hide preview elements */
+              .no-print, .preview-container {
+                display: none !important;
+                visibility: hidden !important;
+                position: absolute !important;
+                left: -9999mm !important;
+              }
+              
+              /* Main label container - FULL 10x10cm */
+              .label {
+                position: absolute !important;
+                top: 0mm !important;
+                left: 0mm !important;
+                width: 10cm !important;
+                height: 10cm !important;
+                margin: 0mm !important;
+                padding: 3mm !important;
+                border: 1mm solid red !important;  /* DEBUG: Red border to see actual size */
+                background: white !important;
+                box-sizing: border-box !important;
+                overflow: visible !important;
+                page-break-inside: avoid !important;
+              }
+              
+              /* Header - fits proportionally */
+              .header {
+                width: 100% !important;
+                height: 8mm !important;
+                font-size: 10pt !important;
+                font-weight: bold !important;
+                display: flex !important;
+                align-items: center !important;
+                justify-content: space-between !important;
+                margin-bottom: 2mm !important;
+                border-bottom: 1pt solid black !important;
+                padding-bottom: 1mm !important;
+                border: 1pt solid blue !important;  /* DEBUG: Blue border */
+              }
+              
+              /* ID Display */
+              .id-display {
+                width: 100% !important;
+                text-align: center !important;
+                font-family: monospace !important;
+                font-size: 14pt !important;
+                font-weight: bold !important;
+                margin: 2mm 0 !important;
+                padding: 2mm !important;
+                border: 2pt dashed black !important;
+                background: #f8f9fa !important;
+                box-sizing: border-box !important;
+              }
+              
+              /* Main content - Side by side layout */
+              .main-content {
+                width: 100% !important;
+                height: 65mm !important;
+                display: flex !important;
+                gap: 3mm !important;
+                margin: 2mm 0 !important;
+                border: 1pt solid green !important;  /* DEBUG: Green border */
+              }
+              
+              /* QR Code section - Takes left half */
+              .qr-section {
+                width: 45mm !important;
+                height: 100% !important;
+                display: flex !important;
+                align-items: center !important;
+                justify-content: center !important;
+                border: 1pt solid orange !important;  /* DEBUG: Orange border */
+              }
+              
+              .qr-code {
+                width: 40mm !important;
+                height: 40mm !important;
+                display: block !important;
+              }
+              
+              .qr-code img {
+                width: 40mm !important;
+                height: 40mm !important;
+                max-width: 40mm !important;
+                max-height: 40mm !important;
+                object-fit: contain !important;
+                border: 1pt solid black !important;
+              }
+              
+              /* Info section - Takes right half */
+              .info-section {
+                width: 45mm !important;
+                height: 100% !important;
+                display: flex !important;
+                flex-direction: column !important;
+                justify-content: space-between !important;
+                border: 1pt solid purple !important;  /* DEBUG: Purple border */
+              }
+              
+              .specs {
+                font-size: 11pt !important;
+                font-weight: bold !important;
+                text-align: center !important;
+                margin-bottom: 2mm !important;
+                padding: 1mm !important;
+                background: #f0f8ff !important;
+                border: 1pt solid black !important;
+                box-sizing: border-box !important;
+              }
+              
+              .info {
+                font-size: 9pt !important;
+                line-height: 1.2 !important;
+                flex: 1 !important;
+              }
+              
+              .info-row {
+                display: flex !important;
+                justify-content: space-between !important;
+                margin-bottom: 1mm !important;
+                padding: 0.5mm 0 !important;
+              }
+              
+              .info-label {
+                font-weight: bold !important;
+                font-size: 9pt !important;
+              }
+              
+              .info-value {
+                font-size: 9pt !important;
+                text-align: right !important;
+                max-width: 20mm !important;
+                word-wrap: break-word !important;
+              }
+              
+              /* Footer */
+              .footer {
+                width: 100% !important;
+                height: 12mm !important;
+                margin-top: 2mm !important;
+                padding: 1mm !important;
+                background: #e3f2fd !important;
+                border: 1pt solid black !important;
+                text-align: center !important;
+                font-size: 8pt !important;
+                display: flex !important;
+                flex-direction: column !important;
+                justify-content: center !important;
+                box-sizing: border-box !important;
+                border: 1pt solid cyan !important;  /* DEBUG: Cyan border */
+              }
+              
+              .footer-text {
+                font-size: 8pt !important;
+                font-weight: bold !important;
+                margin-bottom: 1mm !important;
+              }
+              
+              .footer-subtext {
+                font-size: 7pt !important;
+                margin-top: 1mm !important;
+              }
+              
+              /* Force black text for all elements */
+              * {
+                color: black !important;
+                -webkit-print-color-adjust: exact !important;
+                color-adjust: exact !important;
+              }
+            }
                 size: 100mm 100mm !important;
                 margin: 0 !important;
               }
@@ -700,12 +879,6 @@ export class QRGenerator {
             <div class="id-display">${data.id}</div>
             
             <div class="main-content">
-              <div class="qr-section">
-                <div class="qr-code">
-                  <img src="${qrCodeDataURL}" alt="QR Kod: ${data.id}">
-                </div>
-              </div>
-              
               <div class="info-section">
                 <div class="specs">${data.specifications}</div>
                 
@@ -734,6 +907,12 @@ export class QRGenerator {
                     <span class="info-label">Bobin:</span>
                     <span class="info-value">${data.bobinCount} adet</span>
                   </div>` : ''}
+                </div>
+              </div>
+              
+              <div class="qr-section">
+                <div class="qr-code">
+                  <img src="${qrCodeDataURL}" alt="QR Kod: ${data.id}">
                 </div>
               </div>
             </div>
@@ -779,21 +958,21 @@ export class QRGenerator {
           <meta name="color-scheme" content="light">
           <title>Bobin QR Kod Etiketleri - ${data.parentId}</title>
           <style>
-            /* ZEBRA ZD220 COIL LABELS - AGGRESSIVE OPTIMIZATION */
+            /* ZEBRA ZD220 COIL LABELS - PIXEL PERFECT 203DPI */
             @media print {
               @page {
-                size: 4in 4in;
-                margin: 0 !important;
-                -webkit-print-color-adjust: exact;
-                color-adjust: exact;
+                size: 803px 803px !important;  /* Pixel-perfect for 203dpi */
+                margin: 0px !important;
+                -webkit-print-color-adjust: exact !important;
+                color-adjust: exact !important;
               }
               
               html, body {
-                margin: 0 !important;
-                padding: 0 !important;
-                width: 4in !important;
-                height: 4in !important;
-                font-size: 16px !important;
+                margin: 0px !important;
+                padding: 0px !important;
+                width: 803px !important;
+                height: 803px !important;
+                font-size: 12px !important;
                 background: white !important;
                 overflow: hidden !important;
               }
@@ -801,18 +980,20 @@ export class QRGenerator {
               .no-print, .preview-container {
                 display: none !important;
                 visibility: hidden !important;
-                height: 0 !important;
-                width: 0 !important;
+                width: 0px !important;
+                height: 0px !important;
+                position: absolute !important;
+                left: -9999px !important;
               }
               
               .label {
                 position: absolute !important;
-                top: 0 !important;
-                left: 0 !important;
-                width: 4in !important;
-                height: 4in !important;
-                margin: 0 !important;
-                padding: 0.1in !important;
+                top: 0px !important;
+                left: 0px !important;
+                width: 803px !important;
+                height: 803px !important;
+                margin: 0px !important;
+                padding: 20px !important;
                 border: none !important;
                 background: white !important;
                 box-sizing: border-box !important;
@@ -822,110 +1003,143 @@ export class QRGenerator {
               
               .header {
                 width: 100% !important;
-                height: 0.25in !important;
-                font-size: 10pt !important;
-                margin-bottom: 0.05in !important;
-                border-bottom: 1px solid black !important;
+                height: 50px !important;
+                font-size: 12px !important;
+                margin-bottom: 10px !important;
+                border-bottom: 2px solid black !important;
+                display: flex !important;
+                align-items: center !important;
+                justify-content: space-between !important;
               }
               
               .coil-number {
                 width: 100% !important;
-                height: 0.3in !important;
-                font-size: 12pt !important;
+                height: 60px !important;
+                font-size: 16px !important;
                 font-weight: bold !important;
                 text-align: center !important;
                 background: #007bff !important;
                 color: white !important;
-                margin-bottom: 0.05in !important;
+                margin-bottom: 10px !important;
                 display: flex !important;
                 align-items: center !important;
                 justify-content: center !important;
+                border-radius: 4px !important;
               }
               
               .id-display {
                 width: 100% !important;
                 text-align: center !important;
                 font-family: monospace !important;
-                font-size: 12pt !important;
+                font-size: 16px !important;
                 font-weight: bold !important;
-                margin: 0.05in 0 !important;
-                padding: 0.03in !important;
-                border: 1px dashed black !important;
+                margin: 10px 0 !important;
+                padding: 8px !important;
+                border: 2px dashed black !important;
+                background: #f8f9fa !important;
+                box-sizing: border-box !important;
               }
               
               .qr-section {
                 width: 100% !important;
-                height: 2in !important;
+                height: 450px !important;
                 display: flex !important;
                 justify-content: center !important;
                 align-items: center !important;
-                margin: 0.1in 0 !important;
+                margin: 15px 0 !important;
               }
               
               .qr-code {
-                width: 1.8in !important;
-                height: 1.8in !important;
+                width: 420px !important;  /* Large QR for coil labels */
+                height: 420px !important;
               }
               
               .qr-code img {
-                width: 1.8in !important;
-                height: 1.8in !important;
+                width: 420px !important;
+                height: 420px !important;
                 object-fit: contain !important;
-                border: 1px solid black !important;
+                border: 2px solid black !important;
+                image-rendering: -webkit-optimize-contrast !important;
+                image-rendering: crisp-edges !important;
               }
               
               .specs {
                 width: 100% !important;
-                font-size: 10pt !important;
+                font-size: 14px !important;
                 font-weight: bold !important;
                 text-align: center !important;
-                margin: 0.05in 0 !important;
-                padding: 0.03in !important;
+                margin: 10px 0 !important;
+                padding: 8px !important;
                 background: #f0f8ff !important;
-                border: 1px solid black !important;
+                border: 2px solid black !important;
+                box-sizing: border-box !important;
               }
               
               .info {
                 width: 100% !important;
-                font-size: 8pt !important;
-                line-height: 1.2 !important;
-                margin: 0.05in 0 !important;
+                font-size: 11px !important;
+                line-height: 1.3 !important;
+                margin: 10px 0 !important;
               }
               
               .info-row {
                 display: flex !important;
                 justify-content: space-between !important;
-                margin-bottom: 0.02in !important;
+                margin-bottom: 6px !important;
+                padding: 2px 0 !important;
               }
               
               .info-label {
                 font-weight: bold !important;
-                font-size: 8pt !important;
+                font-size: 11px !important;
+                color: black !important;
               }
               
               .info-value {
-                font-size: 8pt !important;
+                font-size: 11px !important;
                 text-align: right !important;
+                color: black !important;
+                max-width: 300px !important;
+                word-wrap: break-word !important;
               }
               
               .footer {
                 width: 100% !important;
-                height: 0.3in !important;
-                margin-top: auto !important;
-                padding: 0.02in !important;
+                height: 60px !important;
+                margin-top: 15px !important;
+                padding: 8px !important;
                 background: #e3f2fd !important;
-                border: 1px solid black !important;
+                border: 2px solid black !important;
                 text-align: center !important;
-                font-size: 7pt !important;
+                font-size: 10px !important;
                 display: flex !important;
                 align-items: center !important;
                 justify-content: center !important;
+                box-sizing: border-box !important;
               }
               
+              .footer-text {
+                font-size: 10px !important;
+                font-weight: bold !important;
+                color: black !important;
+              }
+              
+              /* Force all colors to black for print */
               * {
                 color: black !important;
                 -webkit-print-color-adjust: exact !important;
                 color-adjust: exact !important;
+              }
+              
+              /* Coil number text should remain white on blue background */
+              .coil-number, .coil-number * {
+                color: white !important;
+              }
+              
+              /* High contrast optimizations */
+              .label * {
+                text-rendering: optimizeLegibility !important;
+                -webkit-font-smoothing: antialiased !important;
               }
             }
             body {
@@ -1194,8 +1408,9 @@ export class QRGenerator {
       let qrCodeDataURL;
       try {
         qrCodeDataURL = await this.generateDataURL(coilQRData, {
-          width: 200,
-          margin: 2
+          width: 1200,  // High resolution for crisp print
+          margin: 4,    // Better margin for scanning
+          errorCorrectionLevel: 'H'  // Maximum error correction
         })
       } catch (error) {
         console.error(`Coil ${i + 1} QR code generation failed:`, error);

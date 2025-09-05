@@ -2,12 +2,14 @@
 
 import { useState } from "react"
 import { QRGenerator } from "@/lib/qr-generator"
+import { DebugQRGenerator } from "@/lib/qr-generator-debug"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { QRDisplay } from "./qr-display"
 import { useToast } from "@/hooks/use-toast"
 import { Printer, Download, Eye, QrCode, Package } from "lucide-react"
+import { QzPrintButton, generateQRZPL } from "./qz-print-button"
 
 interface QRPrinterProps {
   id: string
@@ -42,6 +44,9 @@ export function QRPrinter({
 }: QRPrinterProps) {
   const { toast } = useToast()
   const [isGenerating, setIsGenerating] = useState(false)
+  const [selectedCoils, setSelectedCoils] = useState<Set<number>>(
+    new Set(Array.from({ length: coilCount }, (_, i) => i + 1))
+  )
 
   // Generate QR data for display
   const qrData = QRGenerator.generateQRData({
@@ -61,7 +66,7 @@ export function QRPrinter({
   const handlePrint = async () => {
     setIsGenerating(true)
     try {
-      console.log("Starting QR generation with data:", {
+      console.log("🎯 DEBUG QR generation with data:", {
         id, title, material, specifications, weight, supplier, date, customer, stockType, location, bobinCount: coilCount
       })
 
@@ -70,7 +75,7 @@ export function QRPrinter({
         throw new Error("Gerekli bilgiler eksik: ID, malzeme veya özellikler boş")
       }
 
-      const printableHTML = await QRGenerator.generatePrintableLabel({
+      const printableHTML = await DebugQRGenerator.generatePrintableLabel({
         id,
         title,
         material,
@@ -375,6 +380,105 @@ export function QRPrinter({
     }
   }
 
+  // Bobin seçim fonksiyonları
+  const toggleCoilSelection = (coilNumber: number) => {
+    setSelectedCoils(prev => {
+      const newSet = new Set(prev)
+      if (newSet.has(coilNumber)) {
+        newSet.delete(coilNumber)
+      } else {
+        newSet.add(coilNumber)
+      }
+      return newSet
+    })
+  }
+
+  const selectAllCoils = () => {
+    setSelectedCoils(new Set(Array.from({ length: coilCount }, (_, i) => i + 1)))
+  }
+
+  const deselectAllCoils = () => {
+    setSelectedCoils(new Set())
+  }
+
+  // Seçili bobinler için QZ Tray yazdırma
+  const handleQzPrintSelectedCoils = async () => {
+    if (selectedCoils.size === 0) {
+      toast({
+        title: "Seçim Hatası",
+        description: "Yazdırmak için en az bir bobin seçmelisiniz.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    setIsGenerating(true)
+    try {
+      const selectedCoilsArray = Array.from(selectedCoils).sort((a, b) => a - b)
+      
+      // Her seçili bobin için sırayla yazdır
+      for (const coilNumber of selectedCoilsArray) {
+        const coilId = `${id}-C${String(coilNumber).padStart(2, '0')}`
+        const coilWeight = Math.round((weight / coilCount) * 100) / 100
+        
+        // Bobin için QR data oluştur
+        const coilQRData = QRGenerator.generateQRData({
+          id: coilId,
+          material,
+          cm: parseInt(specifications.split('cm')[0]) || 0,
+          mikron: parseInt(specifications.split('x ')[1]) || 0,
+          weight: coilWeight,
+          supplier,
+          date,
+          customer,
+          stockType,
+          location,
+          bobinCount: 1
+        })
+
+        // ZPL data oluştur
+        const zplData = generateQRZPL(
+          coilQRData, 
+          `${coilId}\n${specifications}\n${coilWeight}kg\n${supplier}\n${customer || ''}\n1 Bobin`
+        )
+
+        // QZ Tray ile yazdır
+        await new Promise<void>((resolve, reject) => {
+          const printWithQz = async () => {
+            try {
+              const { printWithQz: qzPrint } = await import('@/lib/qz-connection')
+              await qzPrint(zplData)
+              resolve()
+            } catch (error) {
+              reject(error)
+            }
+          }
+          printWithQz()
+        })
+
+        // Bobinler arası kısa bekleme
+        if (coilNumber !== selectedCoilsArray[selectedCoilsArray.length - 1]) {
+          await new Promise(resolve => setTimeout(resolve, 500))
+        }
+      }
+
+      toast({
+        title: "QZ Bobin Yazdırma Başarılı ✅",
+        description: `${selectedCoils.size} adet seçili bobin etiketi QZ Tray ile yazdırıldı!`,
+      })
+
+    } catch (error) {
+      console.error("QZ Coil print error:", error)
+      toast({
+        title: "QZ Bobin Yazdırma Hatası ❌",
+        description: error instanceof Error ? error.message : "Bobin etiketleri yazdırılırken hata oluştu",
+        variant: "destructive",
+      })
+    } finally {
+      setIsGenerating(false)
+    }
+  }
+
   return (
     <div className="space-y-4">
       {/* Main QR Code Card */}
@@ -389,43 +493,62 @@ export function QRPrinter({
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          {/* QR Code Preview */}
+          {/* QR Code Preview - Güncel ZPL Tasarımına Uygun */}
           <div className="bg-white p-4 rounded-lg border-2 border-dashed border-blue-300">
             <div className="text-center mb-3">
               <Badge variant="outline" className="mb-2 border-blue-500 text-blue-700">
-                DEPO ETİKETİ - QR KOD
+                DEPO ETİKETİ - QR KOD (10x10cm)
               </Badge>
             </div>
 
-            <div className="text-center mb-3">
-              <div className="font-mono text-lg font-bold text-gray-800 bg-gray-100 px-3 py-2 rounded border-dashed border-2 border-gray-300">
-                {id}
-              </div>
-            </div>
-
-            <div className="flex justify-center mb-3">
-              <QRDisplay data={qrData} width={200} className="border border-gray-200 rounded" />
-            </div>
-
-            <div className="text-center mb-3">
-              <div className="font-medium text-sm bg-blue-50 px-3 py-1 rounded border border-blue-200">{specifications}</div>
-            </div>
-
-            <div className="text-xs space-y-1 text-muted-foreground">
-              <div className="flex justify-between">
-                <span>Ağırlık:</span>
-                <span>{weight} kg</span>
-              </div>
-              <div className="flex justify-between">
-                <span>Tedarikçi:</span>
-                <span>{supplier}</span>
-              </div>
-              {customer && (
-                <div className="flex justify-between">
-                  <span>Müşteri:</span>
-                  <span className="font-medium text-blue-600 dark:text-blue-400">{customer}</span>
+            {/* Ana Layout: Sol tarafta bilgiler, sağ tarafta QR kod */}
+            <div className="flex items-start gap-4 mb-3">
+              {/* Sol taraf: ID ve bilgiler */}
+              <div className="flex-1">
+                {/* ID - En üstte büyük */}
+                <div className="mb-3">
+                  <div className="font-mono text-xl font-bold text-gray-800 bg-gray-100 px-3 py-2 rounded border-dashed border-2 border-gray-300">
+                    {id}
+                  </div>
                 </div>
-              )}
+
+                {/* Özellikler */}
+                <div className="mb-3">
+                  <div className="font-medium text-sm bg-blue-50 px-3 py-1 rounded border border-blue-200">{specifications}</div>
+                </div>
+
+                {/* Diğer bilgiler */}
+                <div className="text-xs space-y-1 text-muted-foreground">
+                  <div className="flex justify-between">
+                    <span>Ağırlık:</span>
+                    <span className="font-medium">{weight} kg</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Tedarikçi:</span>
+                    <span className="font-medium">{supplier}</span>
+                  </div>
+                  {customer && (
+                    <div className="flex justify-between">
+                      <span>Müşteri:</span>
+                      <span className="font-medium text-blue-600 dark:text-blue-400">{customer}</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Sağ taraf: QR kod - Küçük boyut */}
+              <div className="flex-shrink-0">
+                <QRDisplay data={qrData} width={120} className="border border-gray-200 rounded" />
+              </div>
+            </div>
+
+            {/* Ayırıcı çizgi - QR koda değmeyecek şekilde */}
+            <div className="mb-3">
+              <div className="w-3/5 h-px bg-gray-300 border-t border-dashed"></div>
+            </div>
+
+            {/* Alt bilgiler */}
+            <div className="text-xs space-y-1 text-muted-foreground">
               {stockType && stockType !== 'general' && (
                 <div className="flex justify-between">
                   <span>Stok Tipi:</span>
@@ -448,10 +571,6 @@ export function QRPrinter({
               )}
             </div>
 
-            <div className="mt-3 p-2 bg-blue-50 border border-blue-200 rounded text-center">
-              <div className="text-xs text-blue-700 font-medium">📱 QR kod ile hızlı erişim</div>
-              <div className="text-xs text-blue-600 mt-1">Mobil cihazınızla tarayın</div>
-            </div>
           </div>
 
           {/* Action Buttons */}
@@ -466,10 +585,19 @@ export function QRPrinter({
               İndir
             </Button>
 
-            <Button size="sm" onClick={handlePrint} disabled={isGenerating}>
-              <Printer className="h-4 w-4 mr-1" />
-              {isGenerating ? "Hazırlanıyor..." : "Yazdır"}
-            </Button>
+            <QzPrintButton
+              zplData={generateQRZPL(qrData, `${id}\n${specifications}\n${weight}kg\n${supplier}\n${customer || ''}\n${coilCount} Bobin`)}
+              label="Yazdır"
+              onSuccess={() => toast({
+                title: "QZ Yazdırma Başarılı ✅",
+                description: "QR kod etiketi başarıyla yazıcıya gönderildi! (10x10cm)",
+              })}
+              onError={(error) => toast({
+                title: "QZ Yazdırma Hatası ❌",
+                description: error,
+                variant: "destructive",
+              })}
+            />
           </div>
 
           <div className="text-xs text-muted-foreground text-center">
@@ -514,12 +642,52 @@ export function QRPrinter({
                 </Badge>
               </div>
 
-              <div className="text-sm text-center mb-3">
-                <div className="font-medium">{specifications}</div>
-                <div className="text-muted-foreground">Her bobin için ayrı QR kod</div>
+              {/* Bobin QR Önizleme - Güncel ZPL Tasarımına Uygun */}
+              <div className="bg-white p-3 rounded border mb-3">
+                <div className="flex items-start gap-3">
+                  {/* Sol taraf: Bobin bilgileri */}
+                  <div className="flex-1">
+                    <div className="font-mono text-sm font-bold text-gray-800 mb-2">
+                      {id}-C01
+                    </div>
+                    <div className="text-xs bg-blue-50 px-2 py-1 rounded border border-blue-200 mb-2">
+                      {specifications}
+                    </div>
+                    <div className="text-xs space-y-1 text-muted-foreground">
+                      <div>Bobin 1/{coilCount}</div>
+                      <div>~{Math.round((weight / coilCount) * 100) / 100} kg</div>
+                    </div>
+                  </div>
+                  
+                  {/* Sağ taraf: Küçük QR kod */}
+                  <div className="flex-shrink-0">
+                    <QRDisplay 
+                      data={QRGenerator.generateQRData({
+                        id: `${id}-C01`,
+                        material,
+                        cm: parseInt(specifications.split('cm')[0]) || 0,
+                        mikron: parseInt(specifications.split('x ')[1]) || 0,
+                        weight: Math.round((weight / coilCount) * 100) / 100,
+                        supplier,
+                        date,
+                        customer,
+                        stockType,
+                        location,
+                        bobinCount: 1
+                      })} 
+                      width={64} 
+                      className="border border-gray-200 rounded" 
+                    />
+                  </div>
+                </div>
+                
+                {/* Ayırıcı çizgi */}
+                <div className="mt-2">
+                  <div className="w-3/5 h-px bg-gray-300 border-t border-dashed"></div>
+                </div>
               </div>
 
-              <div className="text-xs space-y-1 text-muted-foreground">
+              <div className="text-xs space-y-1 text-muted-foreground mb-3">
                 <div className="flex justify-between">
                   <span>Toplam Ağırlık:</span>
                   <span>{weight} kg</span>
@@ -559,16 +727,87 @@ export function QRPrinter({
                 </div>
               )}
 
-              <div className="mt-3 p-2 bg-blue-100 border border-blue-300 rounded text-center">
-                <div className="text-xs text-blue-800 font-medium">🔗 Her QR kod kendi bilgilerini içerir</div>
-                <div className="text-xs text-blue-700 mt-1">Tekil takip ve yönetim</div>
-              </div>
             </div>
 
-            <Button className="w-full" onClick={handlePrintCoilQRCodes} disabled={isGenerating}>
-              <Printer className="h-4 w-4 mr-2" />
-              {isGenerating ? "Hazırlanıyor..." : `${coilCount} Adet Bobin QR Etiketi Yazdır`}
-            </Button>
+            <div className="space-y-3">
+              {/* Bobin Seçim Sistemi */}
+              <div className="bg-gray-50 dark:bg-gray-800 p-3 rounded border">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="text-xs font-medium text-gray-700 dark:text-gray-300">
+                    Yazdırılacak Bobinleri Seçin: ({selectedCoils.size}/{coilCount})
+                  </div>
+                  <div className="flex gap-1">
+                    <Button 
+                      size="sm" 
+                      variant="ghost" 
+                      onClick={selectAllCoils}
+                      className="h-6 px-2 text-xs"
+                    >
+                      Tümü
+                    </Button>
+                    <Button 
+                      size="sm" 
+                      variant="ghost" 
+                      onClick={deselectAllCoils}
+                      className="h-6 px-2 text-xs"
+                    >
+                      Hiçbiri
+                    </Button>
+                  </div>
+                </div>
+                <div className="grid grid-cols-4 gap-2">
+                  {Array.from({ length: coilCount }, (_, i) => {
+                    const coilNumber = i + 1
+                    const coilNum = String(coilNumber).padStart(2, '0')
+                    const isSelected = selectedCoils.has(coilNumber)
+                    const isHighlighted = highlightedCoil === coilNum
+                    return (
+                      <button
+                        key={i}
+                        type="button"
+                        className={`text-xs px-3 py-2 rounded text-center font-mono cursor-pointer border-2 transition-all ${
+                          isSelected
+                            ? isHighlighted
+                              ? 'bg-green-200 dark:bg-green-800 text-green-800 dark:text-green-200 font-bold border-green-400'
+                              : 'bg-blue-100 dark:bg-blue-800 text-blue-800 dark:text-blue-200 border-blue-400'
+                            : 'bg-white dark:bg-gray-700 text-gray-400 dark:text-gray-500 border-gray-300 hover:border-gray-400'
+                        }`}
+                        onClick={(e) => {
+                          e.preventDefault()
+                          e.stopPropagation()
+                          toggleCoilSelection(coilNumber)
+                        }}
+                      >
+                        C{coilNum}
+                        {isSelected && <span className="ml-1">✓</span>}
+                      </button>
+                    )
+                  })}
+                </div>
+                <div className="mt-2 text-xs text-muted-foreground">
+                  💡 Seçili bobinler mavi, vurgulanan bobin yeşil renkte. Tıklayarak seçimi değiştirebilirsiniz.
+                </div>
+              </div>
+
+              {/* Yazdırma Seçenekleri */}
+              <div className="grid grid-cols-2 gap-2">
+                {/* QZ Tray Yazdırma - Seçimli */}
+                <Button 
+                  onClick={handleQzPrintSelectedCoils} 
+                  disabled={isGenerating || selectedCoils.size === 0}
+                  className="w-full"
+                >
+                  <Printer className="h-4 w-4 mr-2" />
+                  {isGenerating ? "Yazdırılıyor..." : `🖨️ QZ Yazdır (${selectedCoils.size})`}
+                </Button>
+
+                {/* HTML Yazdırma (Mevcut) */}
+                <Button onClick={handlePrintCoilQRCodes} disabled={isGenerating} variant="outline">
+                  <Printer className="h-4 w-4 mr-2" />
+                  {isGenerating ? "Hazırlanıyor..." : "📄 HTML Yazdır"}
+                </Button>
+              </div>
+            </div>
 
             <div className="text-xs text-muted-foreground text-center">
               Her bobine ayrı QR etiket yapıştırarak tekil takip yapabilirsiniz

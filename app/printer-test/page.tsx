@@ -5,308 +5,455 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { QRGenerator } from "@/lib/qr-generator"
-import { ArrowLeft, Printer, Eye, Download, TestTube } from "lucide-react"
+import { Switch } from "@/components/ui/switch"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { ArrowLeft, Printer, Settings2, Shield, ShieldOff, CheckCircle, XCircle, AlertCircle } from "lucide-react"
+import { QzPrintButton, generateTestZPL, generateQRZPL, generateProductLabelZPL, generateShippingLabelZPL } from "@/components/qz-print-button"
+import { useToast } from "@/hooks/use-toast"
+import { ensureQzConnected, safeDisconnect, getQzPrinters } from "@/lib/qz-connection"
+
+interface StatusCheck {
+  name: string
+  status: 'success' | 'error' | 'warning' | 'pending'
+  message: string
+}
 
 export default function PrinterTestPage() {
-  const [testData, setTestData] = useState({
-    id: "DK250121G01",
-    material: "Test Malzeme",
-    specifications: "100cm x 50μ",
-    weight: 1250,
-    supplier: "Test Tedarikçi",
-    date: "2025-01-21",
-    customer: "Test Müşteri",
-    location: "A1-B2-C3"
-  })
+  const { toast } = useToast()
+  const [testText, setTestText] = useState("Türkçe Test: çğıİöşü")
+  const [printerName, setPrinterName] = useState("")
+  const [insecureMode, setInsecureMode] = useState(true)
+  const [isChecking, setIsChecking] = useState(false)
+  const [statusChecks, setStatusChecks] = useState<StatusCheck[]>([])
+  const [availablePrinters, setAvailablePrinters] = useState<string[]>([])
+  const [labelType, setLabelType] = useState("test")
+  const [productName, setProductName] = useState("DEKA Plastik Ürünü")
+  const [productCode, setProductCode] = useState("DKP-001")
+  const [orderNumber, setOrderNumber] = useState("SİP-2025-001")
+  const [customerName, setCustomerName] = useState("Müşteri Adı Soyadı")
+  const [qrData, setQrData] = useState("https://takip.dekaplastik.com/sipariş/12345")
 
-  const handleInputChange = (field: string, value: string | number) => {
-    setTestData(prev => ({
-      ...prev,
-      [field]: value
-    }))
-  }
+  // QZ Tray durumunu kontrol et - Yeni timeout'lu sistem
+  const checkQzStatus = async () => {
+    setIsChecking(true)
+    const checks: StatusCheck[] = []
 
-  const handlePrintTest = async () => {
     try {
-      const printableHTML = await QRGenerator.generatePrintableLabel({
-        id: testData.id,
-        title: "Test Etiketi",
-        material: testData.material,
-        specifications: testData.specifications,
-        weight: testData.weight,
-        supplier: testData.supplier,
-        date: testData.date,
-        customer: testData.customer,
-        location: testData.location,
-        bobinCount: 1
-      })
+      // 1. API Endpoint Kontrolü
+      checks.push({ name: "API Endpoint", status: 'pending', message: "Kontrol ediliyor..." })
+      setStatusChecks([...checks])
 
-      const printWindow = window.open("", "_blank")
-      if (printWindow) {
-        printWindow.document.write(printableHTML)
-        printWindow.document.close()
-        printWindow.focus()
-
-        setTimeout(() => {
-          printWindow.print()
-        }, 500)
+      try {
+        const response = await fetch('/api/qz-sign', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ data: 'test' }),
+        })
+        
+        if (response.ok) {
+          checks[0] = { name: "API Endpoint", status: 'success', message: "QZ Tray API endpoint çalışıyor" }
+        } else {
+          checks[0] = { name: "API Endpoint", status: 'error', message: "API endpoint hatası" }
+          setStatusChecks([...checks])
+          return
+        }
+      } catch (error) {
+        checks[0] = { name: "API Endpoint", status: 'error', message: "API endpoint'e erişilemiyor" }
+        setStatusChecks([...checks])
+        return
       }
-    } catch (error) {
-      console.error("Print test error:", error)
-    }
-  }
+      setStatusChecks([...checks])
 
-  const handlePreviewTest = async () => {
-    try {
-      const printableHTML = await QRGenerator.generatePrintableLabel({
-        id: testData.id,
-        title: "Test Etiketi",
-        material: testData.material,
-        specifications: testData.specifications,
-        weight: testData.weight,
-        supplier: testData.supplier,
-        date: testData.date,
-        customer: testData.customer,
-        location: testData.location,
-        bobinCount: 1
-      })
+      // 2. QZ Tray Tam Bağlantı Testi (timeout'lu)
+      checks.push({ name: "QZ Tray Bağlantısı", status: 'pending', message: "QZ Tray'e bağlanılıyor (timeout: 8s)..." })
+      setStatusChecks([...checks])
 
-      const previewWindow = window.open("", "_blank")
-      if (previewWindow) {
-        previewWindow.document.write(printableHTML)
-        previewWindow.document.close()
+      try {
+        await ensureQzConnected()
+        checks[1] = { name: "QZ Tray Bağlantısı", status: 'success', message: "QZ Tray bağlantısı başarılı (timeout korumalı)" }
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error)
+        if (errorMessage.includes('timeout')) {
+          checks[1] = { name: "QZ Tray Bağlantısı", status: 'error', message: `Bağlantı zaman aşımı: ${errorMessage}` }
+        } else {
+          checks[1] = { name: "QZ Tray Bağlantısı", status: 'error', message: `Bağlantı hatası: ${errorMessage}` }
+        }
+        setStatusChecks([...checks])
+        return
       }
-    } catch (error) {
-      console.error("Preview test error:", error)
-    }
-  }
+      setStatusChecks([...checks])
 
-  const handleDownloadTest = async () => {
-    try {
-      const printableHTML = await QRGenerator.generatePrintableLabel({
-        id: testData.id,
-        title: "Test Etiketi",
-        material: testData.material,
-        specifications: testData.specifications,
-        weight: testData.weight,
-        supplier: testData.supplier,
-        date: testData.date,
-        customer: testData.customer,
-        location: testData.location,
-        bobinCount: 1
+      // 3. Yazıcı Kontrolü (timeout'lu)
+      checks.push({ name: "Yazıcı Kontrolü", status: 'pending', message: "Yazıcılar aranıyor (timeout: 5s)..." })
+      setStatusChecks([...checks])
+
+      try {
+        const printers = await getQzPrinters()
+        
+        if (printers.length > 0) {
+          // Yazıcıları state'e kaydet
+          setAvailablePrinters(printers)
+          checks[2] = { name: "Yazıcı Kontrolü", status: 'success', message: `${printers.length} yazıcı bulundu: ${printers.slice(0, 2).join(', ')}${printers.length > 2 ? '...' : ''}` }
+        } else {
+          setAvailablePrinters([])
+          checks[2] = { name: "Yazıcı Kontrolü", status: 'warning', message: "Hiç yazıcı bulunamadı" }
+        }
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error)
+        setAvailablePrinters([])
+        checks[2] = { name: "Yazıcı Kontrolü", status: 'error', message: `Yazıcı listesi hatası: ${errorMessage}` }
+      }
+      setStatusChecks([...checks])
+
+      // 4. Bağlantı Kapatma
+      checks.push({ name: "Bağlantı Kapatma", status: 'pending', message: "Bağlantı kapatılıyor..." })
+      setStatusChecks([...checks])
+
+      try {
+        await safeDisconnect()
+        checks[3] = { name: "Bağlantı Kapatma", status: 'success', message: "QZ Tray bağlantısı güvenli şekilde kapatıldı" }
+      } catch (error) {
+        checks[3] = { name: "Bağlantı Kapatma", status: 'warning', message: "Bağlantı kapatma uyarısı" }
+      }
+      setStatusChecks([...checks])
+
+      // Genel sonuç
+      const hasErrors = checks.some(check => check.status === 'error')
+      if (!hasErrors) {
+        toast({
+          title: "QZ Tray Kontrolü Başarılı ✅",
+          description: "Tüm kontroller başarıyla tamamlandı. Timeout koruması aktif. Yazdırma testi yapabilirsiniz.",
+        })
+      } else {
+        toast({
+          title: "QZ Tray Kontrolü Tamamlandı ⚠️",
+          description: "Bazı kontrollerde sorun var. Timeout mesajları hangi adımda takıldığını gösterir.",
+          variant: "destructive",
+        })
+      }
+
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error)
+      toast({
+        title: "Kontrol Hatası",
+        description: `QZ Tray kontrolü hatası: ${errorMessage}`,
+        variant: "destructive",
       })
-
-      const blob = new Blob([printableHTML], { type: "text/html" })
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement("a")
-      a.href = url
-      a.download = `test-etiket-${testData.id}.html`
-      document.body.appendChild(a)
-      a.click()
-      document.body.removeChild(a)
-      URL.revokeObjectURL(url)
-    } catch (error) {
-      console.error("Download test error:", error)
+    } finally {
+      setIsChecking(false)
     }
   }
 
-  const generateRandomTestData = () => {
-    const materials = ["PE Film", "PP Film", "PET Film", "Alüminyum Folyo", "Kraft Kağıt"]
-    const suppliers = ["Tedarikçi A", "Tedarikçi B", "Tedarikçi C", "Global Supplier"]
-    const customers = ["Müşteri X", "Müşteri Y", "Müşteri Z", ""]
-    const locations = ["A1-B2-C3", "D4-E5-F6", "G7-H8-I9", "J10-K11-L12"]
+  // Seçilen etiket türüne göre ZPL kodunu oluştur
+  const generateZPLData = () => {
+    switch (labelType) {
+      case "test":
+        return generateTestZPL(testText)
+      case "qr":
+        return generateQRZPL(qrData, testText)
+      case "product":
+        return generateProductLabelZPL(productName, productCode, qrData)
+      case "shipping":
+        return generateShippingLabelZPL(orderNumber, customerName, qrData)
+      default:
+        return generateTestZPL(testText)
+    }
+  }
+
+  // Etiket türüne göre buton etiketi
+  const getPrintButtonLabel = () => {
+    switch (labelType) {
+      case "test":
+        return "📄 Test Etiketi Yazdır"
+      case "qr":
+        return "🔲 QR Kod Etiketi Yazdır"
+      case "product":
+        return "📦 Ürün Etiketi Yazdır"
+      case "shipping":
+        return "🚚 Kargo Etiketi Yazdır"
+      default:
+        return "🖨️ Yazdır"
+    }
+  }
+
+  const handleSuccess = () => {
+    const labelNames = {
+      test: "Test etiketi",
+      qr: "QR kod etiketi",
+      product: "Ürün etiketi",
+      shipping: "Kargo etiketi"
+    }
     
-    const randomMaterial = materials[Math.floor(Math.random() * materials.length)]
-    const randomSupplier = suppliers[Math.floor(Math.random() * suppliers.length)]
-    const randomCustomer = customers[Math.floor(Math.random() * customers.length)]
-    const randomLocation = locations[Math.floor(Math.random() * locations.length)]
-    
-    const randomCm = Math.floor(Math.random() * 200) + 50 // 50-250cm
-    const randomMikron = Math.floor(Math.random() * 100) + 20 // 20-120μ
-    const randomWeight = Math.floor(Math.random() * 2000) + 500 // 500-2500kg
-    
-    const newId = QRGenerator.generateWarehouseId(randomCustomer)
-    
-    setTestData({
-      id: newId,
-      material: randomMaterial,
-      specifications: `${randomCm}cm x ${randomMikron}μ`,
-      weight: randomWeight,
-      supplier: randomSupplier,
-      date: new Date().toISOString().split('T')[0],
-      customer: randomCustomer,
-      location: randomLocation
+    toast({
+      title: "Yazdırma Başarılı ✅",
+      description: `${labelNames[labelType as keyof typeof labelNames]} başarıyla yazıcıya gönderildi! (10x10cm)`,
     })
+  }
+
+  const handleError = (error: string) => {
+    toast({
+      title: "Yazdırma Hatası ❌",
+      description: error,
+      variant: "destructive",
+    })
+  }
+
+  const getStatusIcon = (status: StatusCheck['status']) => {
+    switch (status) {
+      case 'success':
+        return <CheckCircle className="h-4 w-4 text-green-500" />
+      case 'error':
+        return <XCircle className="h-4 w-4 text-red-500" />
+      case 'warning':
+        return <AlertCircle className="h-4 w-4 text-yellow-500" />
+      case 'pending':
+        return <div className="h-4 w-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+    }
   }
 
   return (
     <div className="min-h-screen bg-background">
-      <div className="container mx-auto px-4 py-6 max-w-4xl">
+      <div className="container mx-auto px-4 py-6 max-w-2xl">
         {/* Header */}
         <div className="flex items-center gap-3 mb-6">
           <Button variant="ghost" size="sm" onClick={() => window.history.back()} className="p-2">
             <ArrowLeft className="h-4 w-4" />
           </Button>
           <div>
-            <h1 className="text-2xl font-bold">Yazıcı Test Sayfası</h1>
-            <p className="text-sm text-muted-foreground">10cm x 10cm QR kod etiketlerini test edin</p>
+            <h1 className="text-2xl font-bold flex items-center gap-2">
+              <Printer className="h-6 w-6" />
+              QZ Tray Test
+            </h1>
+            <p className="text-sm text-muted-foreground">
+              QZ Tray bağlantısını test edin ve yazdırma yapın
+            </p>
           </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Test Data Form */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <TestTube className="h-5 w-5" />
-                Test Verisi
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
+        {/* QZ Tray Kontrol */}
+        <Card className="mb-6">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Settings2 className="h-5 w-5" />
+              QZ Tray Durum Kontrolü
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <Button 
+              onClick={checkQzStatus} 
+              disabled={isChecking}
+              className="w-full mb-4"
+            >
+              <Settings2 className="h-4 w-4 mr-2" />
+              {isChecking ? 'Kontrol Ediliyor...' : 'Durum Kontrolü Yap'}
+            </Button>
+
+            {/* Durum Sonuçları */}
+            {statusChecks.length > 0 && (
               <div className="space-y-2">
-                <Label htmlFor="id">Ürün ID</Label>
-                <Input
-                  id="id"
-                  value={testData.id}
-                  onChange={(e) => handleInputChange("id", e.target.value)}
-                  className="font-mono"
+                <h4 className="font-medium text-sm">Kontrol Sonuçları:</h4>
+                {statusChecks.map((check, index) => (
+                  <div key={index} className="flex items-center gap-3 p-2 rounded border">
+                    {getStatusIcon(check.status)}
+                    <div className="flex-1">
+                      <div className="font-medium text-sm">{check.name}</div>
+                      <div className="text-xs text-muted-foreground">{check.message}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Yazdırma Testi */}
+        <Card>
+          <CardHeader>
+            <CardTitle>🖨️ Yazdırma Testi</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid grid-cols-1 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="labelType">Etiket Türü (10x10cm için optimize edilmiş)</Label>
+                <Select value={labelType} onValueChange={setLabelType}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Etiket türü seçin" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="test">📄 Basit Test Etiketi</SelectItem>
+                    <SelectItem value="qr">🔲 QR Kod Etiketi</SelectItem>
+                    <SelectItem value="product">📦 Ürün Etiketi</SelectItem>
+                    <SelectItem value="shipping">🚚 Kargo Etiketi</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Basit Test Etiketi */}
+              {labelType === "test" && (
+                <div className="space-y-2">
+                  <Label htmlFor="testText">Test Metni</Label>
+                  <Input
+                    id="testText"
+                    value={testText}
+                    onChange={(e) => setTestText(e.target.value)}
+                    placeholder="Yazdırılacak test metni..."
+                  />
+                </div>
+              )}
+
+              {/* QR Kod Etiketi */}
+              {labelType === "qr" && (
+                <div className="space-y-3">
+                  <div className="space-y-2">
+                    <Label htmlFor="qrData">QR Kod Verisi</Label>
+                    <Input
+                      id="qrData"
+                      value={qrData}
+                      onChange={(e) => setQrData(e.target.value)}
+                      placeholder="QR kodda yer alacak veri (URL, metin vb.)"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="qrText">QR Etiket Metni</Label>
+                    <Input
+                      id="qrText"
+                      value={testText}
+                      onChange={(e) => setTestText(e.target.value)}
+                      placeholder="QR kodun yanında görünecek metin"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* Ürün Etiketi */}
+              {labelType === "product" && (
+                <div className="space-y-3">
+                  <div className="space-y-2">
+                    <Label htmlFor="productName">Ürün Adı</Label>
+                    <Input
+                      id="productName"
+                      value={productName}
+                      onChange={(e) => setProductName(e.target.value)}
+                      placeholder="Ürün adı"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="productCode">Ürün Kodu</Label>
+                    <Input
+                      id="productCode"
+                      value={productCode}
+                      onChange={(e) => setProductCode(e.target.value)}
+                      placeholder="Ürün kodu"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="productQrData">QR Takip Verisi</Label>
+                    <Input
+                      id="productQrData"
+                      value={qrData}
+                      onChange={(e) => setQrData(e.target.value)}
+                      placeholder="Ürün takip için QR kod verisi"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* Kargo Etiketi */}
+              {labelType === "shipping" && (
+                <div className="space-y-3">
+                  <div className="space-y-2">
+                    <Label htmlFor="orderNumber">Sipariş Numarası</Label>
+                    <Input
+                      id="orderNumber"
+                      value={orderNumber}
+                      onChange={(e) => setOrderNumber(e.target.value)}
+                      placeholder="Sipariş numarası"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="customerName">Müşteri Adı</Label>
+                    <Input
+                      id="customerName"
+                      value={customerName}
+                      onChange={(e) => setCustomerName(e.target.value)}
+                      placeholder="Müşteri adı"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="shippingQrData">Kargo Takip Verisi</Label>
+                    <Input
+                      id="shippingQrData"
+                      value={qrData}
+                      onChange={(e) => setQrData(e.target.value)}
+                      placeholder="Kargo takip için QR kod verisi"
+                    />
+                  </div>
+                </div>
+              )}
+              
+              <div className="space-y-2">
+                <Label htmlFor="printerName">Yazıcı Seçimi</Label>
+                {availablePrinters.length > 0 ? (
+                  <Select value={printerName} onValueChange={setPrinterName}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Yazıcı seçin (boş bırakırsanız varsayılan kullanılır)" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__auto__">🎯 Otomatik (Varsayılan/İlk Yazıcı)</SelectItem>
+                      {availablePrinters.map((printer, index) => (
+                        <SelectItem key={index} value={printer}>
+                          🖨️ {printer}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <div className="p-3 bg-gray-50 dark:bg-gray-900/20 rounded border text-sm text-muted-foreground">
+                    ℹ️ Önce "Durum Kontrolü Yap" butonuna tıklayarak yazıcıları listeleyin
+                  </div>
+                )}
+                
+                {availablePrinters.length > 0 && (
+                  <div className="p-2 bg-blue-50 dark:bg-blue-950/20 rounded border border-blue-200 text-xs text-blue-700 dark:text-blue-300">
+                    ✅ {availablePrinters.length} yazıcı bulundu. Seçim yapabilirsiniz.
+                  </div>
+                )}
+              </div>
+
+              <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-900/20 rounded border">
+                <div className="flex items-center gap-2">
+                  {insecureMode ? (
+                    <ShieldOff className="h-4 w-4 text-orange-500" />
+                  ) : (
+                    <Shield className="h-4 w-4 text-green-500" />
+                  )}
+                  <Label className="text-sm">
+                    Geliştirme Modu (Güvenli Olmayan)
+                  </Label>
+                </div>
+                <Switch
+                  checked={insecureMode}
+                  onCheckedChange={setInsecureMode}
                 />
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="material">Malzeme</Label>
-                <Input
-                  id="material"
-                  value={testData.material}
-                  onChange={(e) => handleInputChange("material", e.target.value)}
-                />
-              </div>
+              {insecureMode && (
+                <div className="p-3 bg-orange-50 dark:bg-orange-950/20 border border-orange-200 rounded text-sm text-orange-700 dark:text-orange-300">
+                  ⚠️ Geliştirme modu: SSL sertifikası gerektirmez, test için daha kolay.
+                </div>
+              )}
+            </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="specifications">Boyutlar</Label>
-                <Input
-                  id="specifications"
-                  value={testData.specifications}
-                  onChange={(e) => handleInputChange("specifications", e.target.value)}
-                  placeholder="100cm x 50μ"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="weight">Ağırlık (kg)</Label>
-                <Input
-                  id="weight"
-                  type="number"
-                  value={testData.weight}
-                  onChange={(e) => handleInputChange("weight", parseInt(e.target.value) || 0)}
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="supplier">Tedarikçi</Label>
-                <Input
-                  id="supplier"
-                  value={testData.supplier}
-                  onChange={(e) => handleInputChange("supplier", e.target.value)}
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="customer">Müşteri (Opsiyonel)</Label>
-                <Input
-                  id="customer"
-                  value={testData.customer}
-                  onChange={(e) => handleInputChange("customer", e.target.value)}
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="location">Lokasyon</Label>
-                <Input
-                  id="location"
-                  value={testData.location}
-                  onChange={(e) => handleInputChange("location", e.target.value)}
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="date">Tarih</Label>
-                <Input
-                  id="date"
-                  type="date"
-                  value={testData.date}
-                  onChange={(e) => handleInputChange("date", e.target.value)}
-                />
-              </div>
-
-              <Button onClick={generateRandomTestData} variant="outline" className="w-full">
-                🎲 Rastgele Test Verisi Oluştur
-              </Button>
-            </CardContent>
-          </Card>
-
-          {/* Test Actions */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Test İşlemleri</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="bg-blue-50 dark:bg-blue-950/20 p-4 rounded-lg border border-blue-200 dark:border-blue-800">
-                <h3 className="font-semibold text-blue-900 dark:text-blue-100 mb-2">
-                  📏 Etiket Boyutları
-                </h3>
-                <ul className="text-sm text-blue-800 dark:text-blue-200 space-y-1">
-                  <li>• <strong>Boyut:</strong> 10cm x 10cm</li>
-                  <li>• <strong>QR Kod:</strong> 4.2cm x 4.2cm</li>
-                  <li>• <strong>Kenar Boşluğu:</strong> 0.3cm</li>
-                  <li>• <strong>Logo:</strong> DEKA text-based</li>
-                </ul>
-              </div>
-
-              <div className="bg-green-50 dark:bg-green-950/20 p-4 rounded-lg border border-green-200 dark:border-green-800">
-                <h3 className="font-semibold text-green-900 dark:text-green-100 mb-2">
-                  🖨️ Yazıcı Ayarları
-                </h3>
-                <ul className="text-sm text-green-800 dark:text-green-200 space-y-1">
-                  <li>• <strong>Kağıt Boyutu:</strong> Özel (10cm x 10cm)</li>
-                  <li>• <strong>Kenar Boşlukları:</strong> 0mm</li>
-                  <li>• <strong>Ölçekleme:</strong> %100</li>
-                  <li>• <strong>Renk:</strong> Siyah-Beyaz</li>
-                </ul>
-              </div>
-
-              <div className="grid grid-cols-1 gap-3">
-                <Button onClick={handlePreviewTest} variant="outline" className="w-full">
-                  <Eye className="h-4 w-4 mr-2" />
-                  Önizleme
-                </Button>
-
-                <Button onClick={handleDownloadTest} variant="outline" className="w-full">
-                  <Download className="h-4 w-4 mr-2" />
-                  HTML İndir
-                </Button>
-
-                <Button onClick={handlePrintTest} className="w-full">
-                  <Printer className="h-4 w-4 mr-2" />
-                  Test Yazdır
-                </Button>
-              </div>
-
-              <div className="bg-yellow-50 dark:bg-yellow-950/20 p-4 rounded-lg border border-yellow-200 dark:border-yellow-800">
-                <h3 className="font-semibold text-yellow-900 dark:text-yellow-100 mb-2">
-                  ⚠️ Test Notları
-                </h3>
-                <ul className="text-sm text-yellow-800 dark:text-yellow-200 space-y-1">
-                  <li>• İlk yazdırmada boyutları kontrol edin</li>
-                  <li>• QR kod okunabilirliğini test edin</li>
-                  <li>• Yazıcı ayarlarını kaydedin</li>
-                  <li>• Farklı kağıt türlerini deneyin</li>
-                </ul>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
+            <QzPrintButton
+              zplData={generateZPLData()}
+              label={getPrintButtonLabel()}
+              printerName={printerName === "__auto__" ? undefined : printerName || undefined}
+              insecureMode={insecureMode}
+              onSuccess={handleSuccess}
+              onError={handleError}
+            />
+          </CardContent>
+        </Card>
       </div>
     </div>
   )

@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge"
 import { BarcodeDisplay } from "./barcode-display"
 import { useToast } from "@/hooks/use-toast"
 import { Printer, Download, Eye, QrCode, Package } from "lucide-react"
+import { QzPrintButton, generateProductLabelZPL } from "./qz-print-button"
 
 interface BarcodePrinterProps {
   barcode: string
@@ -221,7 +222,7 @@ export function BarcodePrinter({
           </div>
 
           {/* Action Buttons */}
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-2 gap-2 mb-2">
             <Button variant="outline" size="sm" onClick={handlePreview} className="bg-transparent">
               <Eye className="h-4 w-4 mr-1" />
               Önizle
@@ -231,11 +232,31 @@ export function BarcodePrinter({
               <Download className="h-4 w-4 mr-1" />
               İndir
             </Button>
+          </div>
 
+          <div className="grid grid-cols-2 gap-2">
             <Button size="sm" onClick={handlePrint} disabled={isGenerating}>
               <Printer className="h-4 w-4 mr-1" />
-              {isGenerating ? "Hazırlanıyor..." : "Yazdır"}
+              {isGenerating ? "Hazırlanıyor..." : "Yazdır (HTML)"}
             </Button>
+
+            <QzPrintButton
+              zplData={generateProductLabelZPL(
+                `${title} - ${specifications}`,
+                barcode,
+                `https://takip.dekaplastik.com/warehouse/${barcode}`
+              )}
+              label="QZ Yazdır"
+              onSuccess={() => toast({
+                title: "QZ Yazdırma Başarılı ✅",
+                description: "Barkod etiketi başarıyla yazıcıya gönderildi! (10x10cm)",
+              })}
+              onError={(error) => toast({
+                title: "QZ Yazdırma Hatası ❌",
+                description: error,
+                variant: "destructive",
+              })}
+            />
           </div>
 
           <div className="text-xs text-muted-foreground text-center">Ana etiketi ürün için kullanın</div>

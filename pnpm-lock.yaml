@@ -152,6 +152,9 @@ importers:
       quagga:
         specifier: ^0.12.1
         version: 0.12.1
+      qz-tray:
+        specifier: ^2.2.5
+        version: 2.2.5
       react:
         specifier: ^19
         version: 19.1.1
@@ -2100,6 +2103,9 @@ packages:
   quagga@0.12.1:
     resolution: {integrity: sha512-bb2N6eT7ss6Bg27sxQgv/CT96KQBkXa+4YeS1W8bhsaXxoWp8zOQbrOwFWEPxPDTNaWEl7hTs3ZB7OC4k3EY3Q==}
     engines: {node: '>= 4.0'}
+
+  qz-tray@2.2.5:
+    resolution: {integrity: sha512-ZPdjFLX1K9j+9v49ertN/QABBhPjUQLQSAQLkSWBrkHLpSv7/rTLLx0NcNMAquCq+WV7Ep4Aw00NJOXMQuMXOA==}
 
   react-day-picker@9.8.0:
     resolution: {integrity: sha512-E0yhhg7R+pdgbl/2toTb0xBhsEAtmAx1l7qjIWYfcxOy8w4rTSVfbtBoSzVVhPwKP/5E9iL38LivzoE3AQDhCQ==}
@@ -4209,6 +4215,8 @@ snapshots:
       lodash: 4.17.21
       ndarray: 1.0.19
       ndarray-linear-interpolate: 1.0.0
+
+  qz-tray@2.2.5: {}
 
   react-day-picker@9.8.0(react@19.1.1):
     dependencies:
