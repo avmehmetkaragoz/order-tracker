@@ -1613,16 +1613,16 @@ export class QRGenerator {
               }
               
               .qr-code {
-                width: 40mm !important;
-                height: 40mm !important;
+                width: 42mm !important;
+                height: 42mm !important;
                 display: block !important;
               }
               
               .qr-code img {
-                width: 40mm !important;
-                height: 40mm !important;
-                max-width: 40mm !important;
-                max-height: 40mm !important;
+                width: 42mm !important;
+                height: 42mm !important;
+                max-width: 42mm !important;
+                max-height: 42mm !important;
                 object-fit: contain !important;
                 border: 1pt solid black !important;
               }
@@ -2116,6 +2116,11 @@ export class QRGenerator {
                 <img src="${qrCodeDataURL}" alt="QR Kod: ${returnQR.qrCode}">
               </div>
             </div>
+          </div>
+          
+          {/* Ayırıcı çizgi - QR koda değmeyecek şekilde, diğer etiketlerle aynı uzunluk */}
+          <div style="margin: 2mm 0;">
+            <div style="width: 60%; height: 1px; background: #ff6b35; border-top: 1px dashed #ff6b35;"></div>
           </div>
           
           <div class="footer">
