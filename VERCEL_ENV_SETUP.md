@@ -29,6 +29,18 @@ Value: secure-auth-token-2024-production
 Environment: Production, Preview, Development
 ```
 
+```
+Name: PRINTNODE_API_KEY
+Value: vGCOs9HPWgwxR-r5BrbS6GIdo5F9EEqZwBs8YNRD_VQ
+Environment: Production, Preview, Development
+```
+
+```
+Name: PRINTNODE_PRINTER_ID
+Value: 74695298
+Environment: Production, Preview, Development
+```
+
 #### 2. Kod Değişiklikleri (✅ Tamamlandı)
 
 - `AUTH_PASSWORD` ve `ADMIN_PASSWORD` backward compatibility eklendi
