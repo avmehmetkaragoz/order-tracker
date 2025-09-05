@@ -1489,7 +1489,7 @@ export class QRGenerator {
     return labelsHTML
   }
 
-  // Generate return QR labels
+  // Generate return QR labels - GÜNCEL TASARIM
   static async generateReturnLabels(data: {
     parentQRCode: string
     title: string
@@ -1516,21 +1516,23 @@ export class QRGenerator {
           <meta name="color-scheme" content="light">
           <title>Dönüş QR Kod Etiketleri - ${data.parentQRCode}</title>
           <style>
-            /* ZEBRA ZD220 RETURN LABELS - AGGRESSIVE OPTIMIZATION */
+            /* GÜNCEL TASARIM - QR SAĞ TARAF, BİLGİLER SOL TARAF */
             @media print {
               @page {
-                size: 4in 4in;
-                margin: 0 !important;
-                -webkit-print-color-adjust: exact;
-                color-adjust: exact;
+                size: 10cm 10cm !important;
+                margin: 0mm !important;
+                padding: 0mm !important;
+                -webkit-print-color-adjust: exact !important;
+                color-adjust: exact !important;
               }
               
               html, body {
-                margin: 0 !important;
-                padding: 0 !important;
-                width: 4in !important;
-                height: 4in !important;
-                font-size: 16px !important;
+                margin: 0mm !important;
+                padding: 0mm !important;
+                width: 10cm !important;
+                height: 10cm !important;
+                font-family: Arial, sans-serif !important;
+                font-size: 12pt !important;
                 background: white !important;
                 overflow: hidden !important;
               }
@@ -1538,138 +1540,134 @@ export class QRGenerator {
               .no-print, .preview-container {
                 display: none !important;
                 visibility: hidden !important;
-                height: 0 !important;
-                width: 0 !important;
+                position: absolute !important;
+                left: -9999mm !important;
               }
               
               .label {
                 position: absolute !important;
-                top: 0 !important;
-                left: 0 !important;
-                width: 4in !important;
-                height: 4in !important;
-                margin: 0 !important;
-                padding: 0.1in !important;
+                top: 0mm !important;
+                left: 0mm !important;
+                width: 10cm !important;
+                height: 10cm !important;
+                margin: 0mm !important;
+                padding: 3mm !important;
                 border: none !important;
                 background: white !important;
                 box-sizing: border-box !important;
-                page-break-after: always !important;
                 overflow: visible !important;
+                page-break-inside: avoid !important;
               }
               
               .header {
                 width: 100% !important;
-                height: 0.25in !important;
+                height: 8mm !important;
                 font-size: 10pt !important;
-                margin-bottom: 0.05in !important;
-                border-bottom: 1px solid #ff6b35 !important;
-              }
-              
-              .return-badge {
-                width: 100% !important;
-                height: 0.3in !important;
-                font-size: 12pt !important;
                 font-weight: bold !important;
-                text-align: center !important;
-                background: #ff6b35 !important;
-                color: white !important;
-                margin-bottom: 0.05in !important;
                 display: flex !important;
                 align-items: center !important;
-                justify-content: center !important;
+                justify-content: space-between !important;
+                margin-bottom: 2mm !important;
+                border-bottom: 1pt solid #ff6b35 !important;
+                padding-bottom: 1mm !important;
               }
               
               .id-display {
                 width: 100% !important;
                 text-align: center !important;
                 font-family: monospace !important;
-                font-size: 12pt !important;
+                font-size: 14pt !important;
                 font-weight: bold !important;
-                margin: 0.05in 0 !important;
-                padding: 0.03in !important;
-                border: 1px dashed #ff6b35 !important;
+                margin: 2mm 0 !important;
+                padding: 2mm !important;
+                border: 2pt dashed #ff6b35 !important;
                 background: #fff5f0 !important;
+                box-sizing: border-box !important;
               }
               
+              /* GÜNCEL TASARIM: Sol bilgiler, sağ QR */
               .main-content {
                 width: 100% !important;
-                height: 2.5in !important;
-                display: grid !important;
-                grid-template-columns: 1.8in 1.8in !important;
-                gap: 0.1in !important;
-                margin: 0.05in 0 !important;
+                height: 65mm !important;
+                display: flex !important;
+                gap: 3mm !important;
+                margin: 2mm 0 !important;
               }
               
+              /* Bilgi bölümü - Sol taraf */
+              .info-section {
+                width: 45mm !important;
+                height: 100% !important;
+                display: flex !important;
+                flex-direction: column !important;
+                justify-content: space-between !important;
+              }
+              
+              /* QR kod bölümü - Sağ taraf */
               .qr-section {
-                width: 1.8in !important;
-                height: 1.8in !important;
+                width: 45mm !important;
+                height: 100% !important;
                 display: flex !important;
                 align-items: center !important;
                 justify-content: center !important;
               }
               
               .qr-code {
-                width: 1.6in !important;
-                height: 1.6in !important;
+                width: 40mm !important;
+                height: 40mm !important;
+                display: block !important;
               }
               
               .qr-code img {
-                width: 1.6in !important;
-                height: 1.6in !important;
+                width: 40mm !important;
+                height: 40mm !important;
+                max-width: 40mm !important;
+                max-height: 40mm !important;
                 object-fit: contain !important;
-                border: 1px solid black !important;
-              }
-              
-              .info-section {
-                width: 1.8in !important;
-                height: 1.8in !important;
-                display: flex !important;
-                flex-direction: column !important;
-                justify-content: space-between !important;
+                border: 1pt solid black !important;
               }
               
               .specs {
-                width: 100% !important;
-                font-size: 10pt !important;
+                font-size: 11pt !important;
                 font-weight: bold !important;
                 text-align: center !important;
-                margin-bottom: 0.05in !important;
-                padding: 0.03in !important;
+                margin-bottom: 2mm !important;
+                padding: 1mm !important;
                 background: #fff5f0 !important;
-                border: 1px solid #ff6b35 !important;
+                border: 1pt solid #ff6b35 !important;
+                box-sizing: border-box !important;
               }
               
               .condition {
-                width: 100% !important;
                 font-size: 9pt !important;
                 font-weight: bold !important;
                 text-align: center !important;
-                margin-bottom: 0.05in !important;
-                padding: 0.03in !important;
-                border-radius: 3px !important;
+                margin-bottom: 2mm !important;
+                padding: 1mm !important;
+                border-radius: 2mm !important;
+                box-sizing: border-box !important;
               }
               
               .condition.kullanilabilir {
                 background: #d4edda !important;
                 color: #155724 !important;
-                border: 1px solid #c3e6cb !important;
+                border: 1pt solid #c3e6cb !important;
               }
               
               .condition.hasarli {
                 background: #f8d7da !important;
                 color: #721c24 !important;
-                border: 1px solid #f5c6cb !important;
+                border: 1pt solid #f5c6cb !important;
               }
               
               .condition.kontrol-gerekli {
                 background: #fff3cd !important;
                 color: #856404 !important;
-                border: 1px solid #ffeaa7 !important;
+                border: 1pt solid #ffeaa7 !important;
               }
               
               .info {
-                width: 100% !important;
-                font-size: 8pt !important;
+                font-size: 9pt !important;
                 line-height: 1.2 !important;
                 flex: 1 !important;
               }
@@ -1677,38 +1675,51 @@ export class QRGenerator {
               .info-row {
                 display: flex !important;
                 justify-content: space-between !important;
-                margin-bottom: 0.02in !important;
+                margin-bottom: 1mm !important;
+                padding: 0.5mm 0 !important;
               }
               
               .info-label {
                 font-weight: bold !important;
-                font-size: 8pt !important;
+                font-size: 9pt !important;
               }
               
               .info-value {
-                font-size: 8pt !important;
+                font-size: 9pt !important;
                 text-align: right !important;
+                max-width: 20mm !important;
+                word-wrap: break-word !important;
               }
               
               .footer {
                 width: 100% !important;
-                height: 0.3in !important;
-                margin-top: 0.05in !important;
-                padding: 0.02in !important;
+                height: 12mm !important;
+                margin-top: 2mm !important;
+                padding: 1mm !important;
                 background: #fff5f0 !important;
-                border: 1px solid #ff6b35 !important;
+                border: 1pt solid #ff6b35 !important;
                 text-align: center !important;
-                font-size: 7pt !important;
+                font-size: 8pt !important;
                 display: flex !important;
-                align-items: center !important;
+                flex-direction: column !important;
                 justify-content: center !important;
+                box-sizing: border-box !important;
               }
               
               .footer-text {
-                color: #ff6b35 !important;
+                font-size: 8pt !important;
                 font-weight: bold !important;
+                margin-bottom: 1mm !important;
+                color: #ff6b35 !important;
               }
               
+              .footer-subtext {
+                font-size: 7pt !important;
+                margin-top: 1mm !important;
+                color: #666 !important;
+              }
+              
+              /* Force black text for all elements */
               * {
                 color: black !important;
                 -webkit-print-color-adjust: exact !important;
@@ -1719,12 +1730,64 @@ export class QRGenerator {
               .company-text, .header-text {
                 color: #ff6b35 !important;
               }
+              
+              .footer-text {
+                color: #ff6b35 !important;
+              }
             }
+            
             body {
               font-family: Arial, sans-serif;
               margin: 20px;
-              background: white;
+              background: #f5f5f5;
+              display: flex;
+              justify-content: center;
+              align-items: center;
+              min-height: 100vh;
+              flex-direction: column;
+              gap: 20px;
             }
+            
+            .preview-container {
+              background: white;
+              padding: 20px;
+              border-radius: 8px;
+              box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+              display: flex;
+              flex-direction: column;
+              align-items: center;
+              gap: 20px;
+            }
+            
+            @media screen {
+              .label {
+                box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+                border: 2px solid #ff6b35;
+                border-radius: 2px;
+                background: white;
+                position: relative;
+                display: flex;
+                flex-direction: column;
+                overflow: visible;
+                margin: 10px auto;
+              }
+              
+              .label * {
+                max-width: 100%;
+                overflow: visible;
+              }
+              
+              .qr-code img {
+                max-width: 100%;
+                height: auto;
+                object-fit: contain;
+              }
+              
+              .header, .main-content, .footer {
+                overflow: visible;
+              }
+            }
+            
             .label {
               width: 10cm;
               height: 10cm;
@@ -1765,20 +1828,6 @@ export class QRGenerator {
               font-size: 9px;
               font-weight: bold;
               color: #ff6b35;
-            }
-            .return-badge {
-              background: #ff6b35;
-              color: white;
-              padding: 0.1cm 0.2cm;
-              border-radius: 3px;
-              font-weight: bold;
-              text-align: center;
-              margin-bottom: 0.2cm;
-              display: flex;
-              align-items: center;
-              justify-content: center;
-              gap: 0.1cm;
-              font-size: 10px;
             }
             .qr-badge {
               background: #ff6b35;
@@ -1927,7 +1976,7 @@ export class QRGenerator {
             </div>
             
             <button class="print-button" onclick="window.print()" style="margin-bottom: 15px; background: #ff6b35;">
-              🖨️ ${data.returnQRCodes.length} Adet Dönüş Etiketi Zebra ZD220'ye Yazdır
+              Yazdır
             </button>
             
             <div style="border: 2px dashed #ff6b35; padding: 10px; border-radius: 4px; background: #fff5f0;">
@@ -1994,8 +2043,9 @@ export class QRGenerator {
       let qrCodeDataURL;
       try {
         qrCodeDataURL = await this.generateDataURL(returnQRData, {
-          width: 200,
-          margin: 2
+          width: 1200,
+          margin: 4,
+          errorCorrectionLevel: 'H'
         })
       } catch (error) {
         console.error(`Return QR code generation failed for ${returnQR.qrCode}:`, error);
@@ -2023,19 +2073,9 @@ export class QRGenerator {
             <span class="qr-badge">QR</span>
           </div>
           
-          <div class="return-badge">
-            DÖNÜŞ BOBİNİ
-          </div>
-          
           <div class="id-display">${returnQR.qrCode}</div>
           
           <div class="main-content">
-            <div class="qr-section">
-              <div class="qr-code">
-                <img src="${qrCodeDataURL}" alt="QR Kod: ${returnQR.qrCode}">
-              </div>
-            </div>
-            
             <div class="info-section">
               <div class="specs">${data.specifications}</div>
               
@@ -2070,10 +2110,17 @@ export class QRGenerator {
                 </div>
               </div>
             </div>
+            
+            <div class="qr-section">
+              <div class="qr-code">
+                <img src="${qrCodeDataURL}" alt="QR Kod: ${returnQR.qrCode}">
+              </div>
+            </div>
           </div>
           
           <div class="footer">
             <div class="footer-text">📱 Dönüş QR kodu ile takip</div>
+            <div class="footer-subtext">Mobil cihazınızla tarayın • Sistem: DEKA Depo Yönetimi</div>
           </div>
         </div>
       `

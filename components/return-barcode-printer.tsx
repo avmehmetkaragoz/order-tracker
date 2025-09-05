@@ -9,6 +9,7 @@ import { QRDisplay } from "./qr-display"
 import { useToast } from "@/hooks/use-toast"
 import { Printer, Download, Eye, RotateCcw, QrCode } from "lucide-react"
 import { QzPrintButton, generateShippingLabelZPL } from "./qz-print-button"
+import { PrintNodeButton } from "./printnode-button"
 import type { StockMovement } from "@/types/warehouse"
 
 interface ReturnBarcodePrinterProps {
@@ -280,45 +281,37 @@ export function ReturnBarcodePrinter({
         </div>
 
         {/* Action Buttons */}
-        <div className="grid grid-cols-2 gap-2 mb-2">
+        <div className="space-y-2">
           <Button
             variant="outline"
             size="sm"
             onClick={handlePreviewReturnQRCodes}
-            className="bg-transparent border-orange-300 text-orange-700 hover:bg-orange-100 dark:border-orange-700 dark:text-orange-300 dark:hover:bg-orange-900/30"
+            className="w-full bg-transparent border-orange-300 text-orange-700 hover:bg-orange-100 dark:border-orange-700 dark:text-orange-300 dark:hover:bg-orange-900/30"
           >
             <Eye className="h-4 w-4 mr-1" />
             Önizle
           </Button>
 
-          <Button
-            size="sm"
-            onClick={handlePrintReturnQRCodes}
-            disabled={isGenerating}
-            className="bg-orange-600 hover:bg-orange-700 text-white"
-          >
-            <Printer className="h-4 w-4 mr-1" />
-            {isGenerating ? "Hazırlanıyor..." : "Yazdır (HTML)"}
-          </Button>
+          <PrintNodeButton
+            zplData={generateShippingLabelZPL(
+              `DÖNÜŞ-${parentBarcode}`,
+              `${customer || supplier} - Dönüş`,
+              `https://takip.dekaplastik.com/warehouse/${parentBarcode}`
+            )}
+            label="Yazdır"
+            title={`Dönüş Etiket - ${parentBarcode}`}
+            onSuccess={() => toast({
+              title: "Yazdırma Başarılı ✅",
+              description: "Dönüş etiketi başarıyla yazıcıya gönderildi! (10x10cm)",
+            })}
+            onError={(error) => toast({
+              title: "Yazdırma Hatası ❌",
+              description: error,
+              variant: "destructive",
+            })}
+            className="w-full"
+          />
         </div>
-
-        <QzPrintButton
-          zplData={generateShippingLabelZPL(
-            `DÖNÜŞ-${parentBarcode}`,
-            `${customer || supplier} - Dönüş`,
-            `https://takip.dekaplastik.com/warehouse/${parentBarcode}`
-          )}
-          label="🔄 QZ Dönüş Etiketi Yazdır"
-          onSuccess={() => toast({
-            title: "QZ Dönüş Etiketi Başarılı ✅",
-            description: "Dönüş etiketi başarıyla yazıcıya gönderildi! (10x10cm)",
-          })}
-          onError={(error) => toast({
-            title: "QZ Dönüş Etiketi Hatası ❌",
-            description: error,
-            variant: "destructive",
-          })}
-        />
 
         <div className="text-xs text-orange-600 dark:text-orange-400 text-center">
           Dönüş yapılan bobinleri QR kod ile ayrı takip etmek için kullanın

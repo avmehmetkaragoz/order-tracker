@@ -9,6 +9,7 @@ import { Switch } from "@/components/ui/switch"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { ArrowLeft, Printer, Settings2, Shield, ShieldOff, CheckCircle, XCircle, AlertCircle } from "lucide-react"
 import { QzPrintButton, generateTestZPL, generateQRZPL, generateProductLabelZPL, generateShippingLabelZPL } from "@/components/qz-print-button"
+import { PrintNodeButton } from "@/components/printnode-button"
 import { useToast } from "@/hooks/use-toast"
 import { ensureQzConnected, safeDisconnect, getQzPrinters } from "@/lib/qz-connection"
 
@@ -444,14 +445,35 @@ export default function PrinterTestPage() {
               )}
             </div>
 
-            <QzPrintButton
-              zplData={generateZPLData()}
-              label={getPrintButtonLabel()}
-              printerName={printerName === "__auto__" ? undefined : printerName || undefined}
-              insecureMode={insecureMode}
-              onSuccess={handleSuccess}
-              onError={handleError}
-            />
+            <div className="space-y-3">
+              <div className="text-sm font-medium text-center">Yazdırma Seçenekleri</div>
+              
+              {/* QZ Tray Yazdırma */}
+              <QzPrintButton
+                zplData={generateZPLData()}
+                label={`QZ Tray: ${getPrintButtonLabel()}`}
+                printerName={printerName === "__auto__" ? undefined : printerName || undefined}
+                insecureMode={insecureMode}
+                onSuccess={handleSuccess}
+                onError={handleError}
+              />
+              
+              {/* PrintNode Yazdırma */}
+              <PrintNodeButton
+                zplData={generateZPLData()}
+                label={`PrintNode: ${getPrintButtonLabel()}`}
+                title={`DEKA ${labelType.toUpperCase()} Etiketi`}
+                onSuccess={handleSuccess}
+                onError={handleError}
+                className="w-full"
+                variant="secondary"
+              />
+              
+              <div className="text-xs text-muted-foreground text-center space-y-1">
+                <div>🔧 <strong>QZ Tray:</strong> Yerel yazıcı bağlantısı (sertifika gerekli)</div>
+                <div>☁️ <strong>PrintNode:</strong> Uzak yazıcı bağlantısı (sertifika gerektirmez)</div>
+              </div>
+            </div>
           </CardContent>
         </Card>
       </div>

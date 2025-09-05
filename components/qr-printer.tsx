@@ -10,6 +10,7 @@ import { QRDisplay } from "./qr-display"
 import { useToast } from "@/hooks/use-toast"
 import { Printer, Download, Eye, QrCode, Package } from "lucide-react"
 import { QzPrintButton, generateQRZPL } from "./qz-print-button"
+import { PrintNodeButton } from "./printnode-button"
 
 interface QRPrinterProps {
   id: string
@@ -574,29 +575,33 @@ export function QRPrinter({
           </div>
 
           {/* Action Buttons */}
-          <div className="grid grid-cols-3 gap-2">
-            <Button variant="outline" size="sm" onClick={handlePreview} className="bg-transparent">
-              <Eye className="h-4 w-4 mr-1" />
-              Önizle
-            </Button>
+          <div className="space-y-2">
+            <div className="grid grid-cols-2 gap-2">
+              <Button variant="outline" size="sm" onClick={handlePreview} className="bg-transparent">
+                <Eye className="h-4 w-4 mr-1" />
+                Önizle
+              </Button>
 
-            <Button variant="outline" size="sm" onClick={handleDownload} className="bg-transparent">
-              <Download className="h-4 w-4 mr-1" />
-              İndir
-            </Button>
+              <Button variant="outline" size="sm" onClick={handleDownload} className="bg-transparent">
+                <Download className="h-4 w-4 mr-1" />
+                İndir
+              </Button>
+            </div>
 
-            <QzPrintButton
+            <PrintNodeButton
               zplData={generateQRZPL(qrData, `${id}\n${specifications}\n${weight}kg\n${supplier}\n${customer || ''}\n${coilCount} Bobin`)}
               label="Yazdır"
+              title={`QR Etiket - ${id}`}
               onSuccess={() => toast({
-                title: "QZ Yazdırma Başarılı ✅",
+                title: "Yazdırma Başarılı ✅",
                 description: "QR kod etiketi başarıyla yazıcıya gönderildi! (10x10cm)",
               })}
               onError={(error) => toast({
-                title: "QZ Yazdırma Hatası ❌",
+                title: "Yazdırma Hatası ❌",
                 description: error,
                 variant: "destructive",
               })}
+              className="w-full"
             />
           </div>
 
@@ -790,21 +795,16 @@ export function QRPrinter({
               </div>
 
               {/* Yazdırma Seçenekleri */}
-              <div className="grid grid-cols-2 gap-2">
+              <div className="flex justify-center">
                 {/* QZ Tray Yazdırma - Seçimli */}
                 <Button 
                   onClick={handleQzPrintSelectedCoils} 
                   disabled={isGenerating || selectedCoils.size === 0}
                   className="w-full"
+                  size="sm"
                 >
                   <Printer className="h-4 w-4 mr-2" />
-                  {isGenerating ? "Yazdırılıyor..." : `🖨️ QZ Yazdır (${selectedCoils.size})`}
-                </Button>
-
-                {/* HTML Yazdırma (Mevcut) */}
-                <Button onClick={handlePrintCoilQRCodes} disabled={isGenerating} variant="outline">
-                  <Printer className="h-4 w-4 mr-2" />
-                  {isGenerating ? "Hazırlanıyor..." : "📄 HTML Yazdır"}
+                  {isGenerating ? "Yazdırılıyor..." : `Yazdır (${selectedCoils.size})`}
                 </Button>
               </div>
             </div>
