@@ -2118,10 +2118,6 @@ export class QRGenerator {
             </div>
           </div>
           
-          {/* Ayırıcı çizgi - QR koda değmeyecek şekilde, diğer etiketlerle aynı uzunluk */}
-          <div style="margin: 2mm 0;">
-            <div style="width: 60%; height: 1px; background: #ff6b35; border-top: 1px dashed #ff6b35;"></div>
-          </div>
           
           <div class="footer">
             <div class="footer-text">📱 Dönüş QR kodu ile takip</div>
